@@ -1,0 +1,199 @@
+@import "tailwindcss";
+
+/* ── Custom Theme Tokens (Tailwind v4) ────────────────────────────────────── */
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  /* Brand Colors */
+  --color-navy-950: #050a18;
+  --color-navy-900: #0a0f1e;
+  --color-navy-800: #0f172a;
+  --color-navy-700: #1e293b;
+  --color-navy-600: #334155;
+
+  --color-gold-500: #d4a843;
+  --color-gold-400: #e2be6a;
+  --color-gold-300: #f0d48e;
+  --color-gold-600: #b8922e;
+
+  /* Status Colors */
+  --color-success: #22c55e;
+  --color-danger: #ef4444;
+  --color-warning: #f59e0b;
+  --color-info: #3b82f6;
+  --color-purple: #a855f7;
+
+  /* Glass */
+  --color-glass: rgba(15, 23, 42, 0.7);
+  --color-glass-border: rgba(212, 168, 67, 0.15);
+  --color-glass-light: rgba(255, 255, 255, 0.05);
+
+  /* Animations */
+  --animate-fade-in: fade-in 0.5s ease-out;
+  --animate-slide-up: slide-up 0.5s ease-out;
+  --animate-pulse-gold: pulse-gold 2s ease-in-out infinite;
+  --animate-scale-in: scale-in 0.3s ease-out;
+  --animate-shimmer: shimmer 2s linear infinite;
+}
+
+:root {
+  --background: #050a18;
+  --foreground: #e2e8f0;
+}
+
+/* ── Keyframes ────────────────────────────────────────────────────────────── */
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-gold {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(212, 168, 67, 0.4); }
+  50% { box-shadow: 0 0 0 12px rgba(212, 168, 67, 0); }
+}
+
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes timer-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+@keyframes count-danger {
+  0%, 100% { color: #ef4444; }
+  50% { color: #fca5a5; }
+}
+
+/* ── Base Styles ──────────────────────────────────────────────────────────── */
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+/* ── Glassmorphism Card ───────────────────────────────────────────────────── */
+
+.glass-card {
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(212, 168, 67, 0.15);
+  border-radius: 16px;
+}
+
+.glass-card-light {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+}
+
+/* ── Gold Gradient Text ───────────────────────────────────────────────────── */
+
+.text-gradient-gold {
+  background: linear-gradient(135deg, #d4a843, #f0d48e, #d4a843);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Scrollbar ────────────────────────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0a0f1e;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* ── Timer Pulse Animation ────────────────────────────────────────────────── */
+
+.timer-danger {
+  animation: timer-pulse 0.5s ease-in-out infinite, count-danger 1s ease-in-out infinite;
+}
+
+/* ── Option Hover Effect ──────────────────────────────────────────────────── */
+
+.option-card {
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.option-card:hover {
+  transform: translateX(4px);
+  border-color: rgba(212, 168, 67, 0.4);
+  background: rgba(212, 168, 67, 0.08);
+}
+
+.option-card.selected {
+  border-color: #d4a843;
+  background: rgba(212, 168, 67, 0.15);
+  box-shadow: 0 0 20px rgba(212, 168, 67, 0.1);
+}
+
+.option-card.correct {
+  border-color: #22c55e;
+  background: rgba(34, 197, 94, 0.15);
+}
+
+.option-card.wrong {
+  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.15);
+}
+
+/* ── Palette Button ───────────────────────────────────────────────────────── */
+
+.palette-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid transparent;
+}
+
+.palette-btn:hover {
+  transform: scale(1.1);
+}
+
+/* ── Modal Overlay ────────────────────────────────────────────────────────── */
+
+.modal-overlay {
+  background: rgba(5, 10, 24, 0.85);
+  backdrop-filter: blur(8px);
+}
