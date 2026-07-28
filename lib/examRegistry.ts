@@ -1,5 +1,9 @@
+// ── Exam Registry — Client-Safe (NO serverQuestions import) ──────────────────
+// Questions are loaded from Firestore DB via /api/exam/questions (server-side).
+// This file contains only exam paper METADATA for UI display purposes.
+// correctAnswer values are NEVER present here on the client.
+
 import { ExamPaper, ServerQuestion } from "./types";
-import { serverQuestions } from "./serverQuestions";
 import {
   saveExamPaperInDB,
   deleteExamPaperInDB,
@@ -7,6 +11,7 @@ import {
   seedExamPapersToDB,
 } from "./firebase";
 
+// Metadata-only exam papers (questions: [] — loaded from DB at runtime)
 export const initialExamPapers: ExamPaper[] = [
   {
     id: "culet-2026-mock-2",
@@ -17,9 +22,9 @@ export const initialExamPapers: ExamPaper[] = [
     marksPerCorrect: 1,
     negativeMarks: 0.25,
     passingPercentage: 40,
-    maxAttempts: 1, // Default 1 attempt per student
+    maxAttempts: 1,
     status: "active",
-    questions: serverQuestions,
+    questions: [], // Questions loaded from Firestore — never bundled client-side
   },
   {
     id: "legal-aptitude-mock-1",
@@ -32,7 +37,7 @@ export const initialExamPapers: ExamPaper[] = [
     passingPercentage: 50,
     maxAttempts: 1,
     status: "active",
-    questions: serverQuestions.slice(0, 30),
+    questions: [],
   },
   {
     id: "gk-current-affairs-1",
@@ -43,9 +48,9 @@ export const initialExamPapers: ExamPaper[] = [
     marksPerCorrect: 1,
     negativeMarks: 0.25,
     passingPercentage: 40,
-    maxAttempts: 3, // Multi-attempt practice paper
+    maxAttempts: 3,
     status: "active",
-    questions: serverQuestions.slice(30, 50),
+    questions: [],
   },
 ];
 
@@ -58,7 +63,7 @@ function loadFromStorage(): ExamPaper[] {
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed)) {
-          return parsed;
+          return parsed.map((p: ExamPaper) => ({ ...p, questions: p.questions || [] }));
         }
       }
     } catch (e) {
@@ -134,6 +139,7 @@ export function addQuestionToExam(examId: string, newQ: ServerQuestion): void {
   const papers = getExamPapers();
   const paper = papers.find((p) => p.id === examId);
   if (paper) {
+    if (!paper.questions) paper.questions = [];
     paper.questions.push(newQ);
     saveToStorage(papers);
     saveExamPaperInDB(paper);
@@ -142,4 +148,5 @@ export function addQuestionToExam(examId: string, newQ: ServerQuestion): void {
 
 export function resetExamPapersToDefault(): void {
   saveToStorage([...initialExamPapers]);
+  seedExamPapersToDB(initialExamPapers);
 }

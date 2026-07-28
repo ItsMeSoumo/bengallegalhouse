@@ -9,15 +9,16 @@ import Button from "@/components/ui/Button";
 import Spinner from "@/components/ui/Spinner";
 import { useTimer } from "@/hooks/useTimer";
 import { useExam } from "@/hooks/useExam";
-import { questions } from "@/lib/questions";
+import { PublicQuestion } from "@/lib/types";
 import { EXAM_CONFIG } from "@/lib/constants";
-import { getExamPaperById } from "@/lib/examRegistry";
 import { getAllExamResults } from "@/lib/firebase";
 
 export default function ExamPage() {
   const router = useRouter();
   const [candidateName, setCandidateName] = useState("");
   const [isInitializing, setIsInitializing] = useState(true);
+  const [examQuestions, setExamQuestions] = useState<PublicQuestion[]>([]);
+  const [examTimeSec, setExamTimeSec] = useState(EXAM_CONFIG.totalTime);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showWarningModal, setShowWarningModal] = useState(false);
   const [warningMessage, setWarningMessage] = useState("");
@@ -25,8 +26,8 @@ export default function ExamPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
 
-  const exam = useExam(questions);
-  const currentQuestion = questions[exam.state.currentQuestionIndex];
+  const exam = useExam(examQuestions);
+  const currentQuestion = examQuestions[exam.state.currentQuestionIndex];
 
   // Ref to track latest state for auto-submit
   const examStateRef = useRef(exam.state);
@@ -68,15 +69,6 @@ export default function ExamPage() {
       router.push("/results");
     }
   }, [router, isSubmitting]);
-
-  const [examTimeSec, setExamTimeSec] = useState(EXAM_CONFIG.totalTime);
-
-  useEffect(() => {
-    const savedTime = sessionStorage.getItem("activeExamTime");
-    if (savedTime && !isNaN(Number(savedTime))) {
-      setExamTimeSec(Number(savedTime));
-    }
-  }, []);
 
   const timer = useTimer(examTimeSec, handleSubmit);
 
@@ -150,7 +142,7 @@ export default function ExamPage() {
     };
   }, [handleTabSwitchViolation]);
 
-  // Initialize exam on mount
+  // Initialize exam on mount — fetch questions from DB via secure server API
   useEffect(() => {
     const name = sessionStorage.getItem("candidateName");
     const email = sessionStorage.getItem("candidateEmail") || "";
@@ -160,31 +152,53 @@ export default function ExamPage() {
     }
 
     const activeExamId = sessionStorage.getItem("activeExamId") || "culet-2026-mock-2";
-    const paper = getExamPaperById(activeExamId);
+    const savedTime = sessionStorage.getItem("activeExamTime");
+    if (savedTime && !isNaN(Number(savedTime))) {
+      setExamTimeSec(Number(savedTime));
+    }
 
     const initExamProcess = async () => {
       try {
-        if (paper && paper.maxAttempts > 0) {
+        // 1. Fetch questions dynamically from Firestore DB via secure server endpoint
+        const res = await fetch(`/api/exam/questions?examId=${encodeURIComponent(activeExamId)}`);
+        const data = await res.json();
+
+        if (!data.success || !data.questions || data.questions.length === 0) {
+          console.error("Failed to load exam questions from server DB");
+          setIsInitializing(false);
+          return;
+        }
+
+        const loadedQuestions: PublicQuestion[] = data.questions;
+
+        // 2. Set updated timer duration from database configuration
+        if (data.totalTimeMinutes && data.totalTimeMinutes > 0) {
+          const durationSec = data.totalTimeMinutes * 60;
+          setExamTimeSec(durationSec);
+          sessionStorage.setItem("activeExamTime", String(durationSec));
+        }
+
+        // 2. Check attempt limits
+        if (data.maxAttempts && data.maxAttempts > 0) {
           const results = await getAllExamResults();
           const attempts = results.filter(
             (r) =>
-              r.examId === paper.id &&
+              r.examId === activeExamId &&
               ((email && r.candidateEmail && r.candidateEmail.toLowerCase() === email.toLowerCase()) ||
                 r.candidateName.toLowerCase().trim() === name.toLowerCase().trim())
           ).length;
 
-          if (attempts >= paper.maxAttempts) {
-            setLimitReachedModal({ maxAttempts: paper.maxAttempts, title: paper.title });
+          if (attempts >= data.maxAttempts) {
+            setLimitReachedModal({ maxAttempts: data.maxAttempts, title: data.title });
+            setIsInitializing(false);
             return;
           }
         }
 
+        setExamQuestions(loadedQuestions);
         setCandidateName(name);
-        exam.initExam(name);
-        timer.start();
       } catch (err) {
         console.error("Error initializing exam:", err);
-      } finally {
         setIsInitializing(false);
       }
     };
@@ -192,6 +206,16 @@ export default function ExamPage() {
     initExamProcess();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Initialize exam state once questions load from API
+  useEffect(() => {
+    if (examQuestions.length > 0 && candidateName) {
+      exam.initExam(candidateName);
+      timer.start();
+      setIsInitializing(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [examQuestions, candidateName]);
 
   const answeredCount = exam.state.answers.filter((a) => a !== null).length;
 
@@ -230,7 +254,7 @@ export default function ExamPage() {
             <QuestionCard
               question={currentQuestion}
               questionIndex={exam.state.currentQuestionIndex}
-              totalQuestions={questions.length}
+              totalQuestions={examQuestions.length}
               selectedAnswer={
                 exam.state.answers[exam.state.currentQuestionIndex]
               }
@@ -330,7 +354,7 @@ export default function ExamPage() {
                   Previous
                 </Button>
 
-                {exam.state.currentQuestionIndex < questions.length - 1 ? (
+                {exam.state.currentQuestionIndex < examQuestions.length - 1 ? (
                   <Button
                     variant="primary"
                     size="sm"
@@ -369,7 +393,7 @@ export default function ExamPage() {
         <aside className="hidden lg:block w-72 p-4 pl-0">
           <div className="sticky top-24">
             <QuestionPalette
-              totalQuestions={questions.length}
+              totalQuestions={examQuestions.length}
               state={exam.state}
               onJump={exam.jumpToQuestion}
             />
@@ -410,7 +434,7 @@ export default function ExamPage() {
               </button>
             </div>
             <QuestionPalette
-              totalQuestions={questions.length}
+              totalQuestions={examQuestions.length}
               state={exam.state}
               onJump={(i) => {
                 exam.jumpToQuestion(i);
@@ -492,7 +516,7 @@ export default function ExamPage() {
               </div>
               <div className="glass-card-light p-3 rounded-xl">
                 <p className="text-lg font-bold text-foreground/50">
-                  {questions.length - answeredCount}
+                  {examQuestions.length - answeredCount}
                 </p>
                 <p className="text-xs text-foreground/40">Unanswered</p>
               </div>

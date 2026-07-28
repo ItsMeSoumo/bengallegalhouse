@@ -22,6 +22,13 @@ export function useTimer(
   // Keep the callback ref fresh
   onExpireRef.current = onExpire;
 
+  // Sync initial duration when totalSeconds prop changes before starting
+  useEffect(() => {
+    if (!isRunning) {
+      setTimeLeft(totalSeconds);
+    }
+  }, [totalSeconds, isRunning]);
+
   const clearTimer = useCallback(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);

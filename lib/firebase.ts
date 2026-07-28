@@ -39,10 +39,21 @@ export async function loginWithGoogle(): Promise<{ name: string; email: string }
   try {
     const result = await signInWithPopup(auth, googleProvider);
     const user = result.user;
-    return {
+    const studentInfo = {
       name: user.displayName || user.email || "Student Candidate",
       email: user.email || "",
     };
+
+    // Auto-register Google student user document in student_users collection
+    if (studentInfo.email) {
+      try {
+        await registerStudentUserInDB(studentInfo.name, studentInfo.email, "google_oauth_user");
+      } catch (regErr) {
+        console.warn("Google user auto-registration notice:", regErr);
+      }
+    }
+
+    return studentInfo;
   } catch (error: unknown) {
     console.error("Google Auth error:", error);
     const errObj = error as { code?: string; message?: string };
@@ -85,7 +96,7 @@ export async function registerStudentUserInDB(
 ): Promise<StudentAuthResult> {
   try {
     const cleanEmail = email.trim().toLowerCase();
-    
+
     // Check if user already exists with this email ID
     const q = query(
       collection(db, USERS_COLLECTION),
@@ -93,9 +104,10 @@ export async function registerStudentUserInDB(
     );
     const snapshot = await getDocs(q);
     if (!snapshot.empty) {
+      const existingData = snapshot.docs[0].data();
       return {
-        success: false,
-        error: "An account with this email address already exists. Please Log In!",
+        success: true,
+        user: { name: existingData.name || name.trim(), email: cleanEmail },
       };
     }
 
@@ -198,14 +210,17 @@ export async function authenticateStudentUserInDB(
 export async function getAllStudentUsers(): Promise<StudentUserRecord[]> {
   try {
     const snapshot = await getDocs(collection(db, USERS_COLLECTION));
-    return snapshot.docs.map((d) => ({
-      id: d.id,
-      name: d.data().name || "Unknown Student",
-      email: d.data().email || "",
-      createdAt: d.data().createdAt,
-    }));
+    return snapshot.docs.map((d) => {
+      const data = d.data();
+      return {
+        id: d.id,
+        name: data.name || data.email || "Student Candidate",
+        email: data.email || "",
+        createdAt: data.createdAt,
+      };
+    });
   } catch (err) {
-    console.error("Error fetching student users:", err);
+    console.error("Error fetching student users from DB:", err);
     return [];
   }
 }

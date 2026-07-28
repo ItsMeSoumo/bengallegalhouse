@@ -3,8 +3,8 @@
 import Button from "@/components/ui/Button";
 
 interface AdminSidebarProps {
-  activeTab: "candidates" | "exams";
-  setActiveTab: (tab: "candidates" | "exams") => void;
+  activeTab: "candidates" | "exams" | "students";
+  setActiveTab: (tab: "candidates" | "exams" | "students") => void;
   onLogout: () => void;
 }
 
@@ -72,6 +72,30 @@ export default function AdminSidebar({
               />
             </svg>
             Student Results
+          </button>
+
+          <button
+            onClick={() => setActiveTab("students")}
+            className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition cursor-pointer ${
+              activeTab === "students"
+                ? "bg-gold-500 text-navy-950 font-bold shadow-lg shadow-gold-500/15"
+                : "text-foreground/60 hover:text-white hover:bg-navy-800/50"
+            }`}
+          >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+              />
+            </svg>
+            Only Students
           </button>
 
           <button

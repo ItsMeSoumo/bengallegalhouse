@@ -122,110 +122,109 @@ export default function StudentDashboard() {
               </Card>
             ) : (
               <div className="space-y-6">
-              {examPapers.map((paper) => {
-                const attemptsTaken = pastResults.filter((r) => r.examId === paper.id).length;
-                const maxAllowed = paper.maxAttempts || 0; // 0 = unlimited
-                const isLimitReached = maxAllowed > 0 && attemptsTaken >= maxAllowed;
+                {examPapers.map((paper) => {
+                  const attemptsTaken = pastResults.filter((r) => r.examId === paper.id).length;
+                  const maxAllowed = paper.maxAttempts || 0; // 0 = unlimited
+                  const isLimitReached = maxAllowed > 0 && attemptsTaken >= maxAllowed;
 
-                return (
-                  <Card key={paper.id} variant="highlight" className="p-6 space-y-6">
-                    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-navy-600/30 pb-4">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gold-500/20 text-gold-400 border border-gold-500/30">
-                            {paper.subtitle}
-                          </span>
-                          {maxAllowed > 0 && (
-                            <span
-                              className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                                isLimitReached
-                                  ? "bg-danger/20 text-danger border border-danger/30"
-                                  : "bg-navy-800 text-purple-300 border border-purple-500/30"
-                              }`}
-                            >
-                              Attempts: {attemptsTaken} / {maxAllowed}
+                  return (
+                    <Card key={paper.id} variant="highlight" className="p-6 space-y-6">
+                      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-navy-600/30 pb-4">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gold-500/20 text-gold-400 border border-gold-500/30">
+                              {paper.subtitle}
                             </span>
-                          )}
+                            {maxAllowed > 0 && (
+                              <span
+                                className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${isLimitReached
+                                    ? "bg-danger/20 text-danger border border-danger/30"
+                                    : "bg-navy-800 text-purple-300 border border-purple-500/30"
+                                  }`}
+                              >
+                                Attempts: {attemptsTaken} / {maxAllowed}
+                              </span>
+                            )}
+                          </div>
+                          <h3 className="text-xl font-bold text-white mt-2">
+                            {paper.title}
+                          </h3>
+                          <p className="text-xs text-foreground/50 mt-1 max-w-2xl">
+                            {paper.description}
+                          </p>
                         </div>
-                        <h3 className="text-xl font-bold text-white mt-2">
-                          {paper.title}
-                        </h3>
-                        <p className="text-xs text-foreground/50 mt-1 max-w-2xl">
-                          {paper.description}
-                        </p>
-                      </div>
 
-                      {paper.status === "paused" ? (
-                        <span className="px-4 py-2 rounded-xl text-xs font-bold bg-warning/15 text-warning border border-warning/30">
-                          Paused by Admin
-                        </span>
-                      ) : isLimitReached ? (
-                        <div className="w-full md:w-auto px-5 py-3 rounded-xl text-xs md:text-sm font-bold bg-navy-900/90 text-gold-300 border border-gold-500/40 flex items-center justify-center gap-2 shadow-md cursor-not-allowed select-none">
-                          <svg
-                            className="w-4 h-4 text-gold-400"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth={2.2}
+                        {paper.status === "paused" ? (
+                          <span className="px-4 py-2 rounded-xl text-xs font-bold bg-warning/15 text-warning border border-warning/30">
+                            Paused by Admin
+                          </span>
+                        ) : isLimitReached ? (
+                          <div className="w-full md:w-auto px-5 py-3 rounded-xl text-xs md:text-sm font-bold bg-navy-900/90 text-gold-300 border border-gold-500/40 flex items-center justify-center gap-2 shadow-md cursor-not-allowed select-none">
+                            <svg
+                              className="w-4 h-4 text-gold-400"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                              strokeWidth={2.2}
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                              />
+                            </svg>
+                            <span>Attempt Limit Reached</span>
+                          </div>
+                        ) : (
+                          <Button
+                            size="lg"
+                            onClick={() => handleStartExamClick(paper)}
+                            className="w-full md:w-auto"
                           >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                            />
-                          </svg>
-                          <span>Attempt Limit Reached</span>
-                        </div>
-                      ) : (
-                        <Button
-                          size="lg"
-                          onClick={() => handleStartExamClick(paper)}
-                          className="w-full md:w-auto"
-                        >
-                          Start Examination
-                        </Button>
-                      )}
-                    </div>
+                            Start Examination
+                          </Button>
+                        )}
+                      </div>
 
-                    {/* Specs */}
-                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-center">
-                      <div className="glass-card-light p-3 rounded-xl">
-                        <p className="text-xs text-foreground/40">Questions</p>
-                        <p className="text-lg font-bold text-gold-400">
-                          {paper.questions.length}
-                        </p>
+                      {/* Specs */}
+                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-center">
+                        <div className="glass-card-light p-3 rounded-xl">
+                          <p className="text-xs text-foreground/40">Questions</p>
+                          <p className="text-lg font-bold text-gold-400">
+                            {paper.questions.length}
+                          </p>
+                        </div>
+                        <div className="glass-card-light p-3 rounded-xl">
+                          <p className="text-xs text-foreground/40">Timer Duration</p>
+                          <p className="text-lg font-bold text-gold-400">
+                            {paper.totalTimeMinutes} Mins
+                          </p>
+                        </div>
+                        <div className="glass-card-light p-3 rounded-xl">
+                          <p className="text-xs text-foreground/40">Marking Scheme</p>
+                          <p className="text-lg font-bold">
+                            <span className="text-success">+{paper.marksPerCorrect}</span>
+                            <span className="text-foreground/40 mx-1">/</span>
+                            <span className="text-danger">-{paper.negativeMarks}</span>
+                          </p>
+                        </div>
+                        <div className="glass-card-light p-3 rounded-xl">
+                          <p className="text-xs text-foreground/40">Max Attempts</p>
+                          <p className="text-lg font-bold text-purple-400">
+                            {maxAllowed === 0 ? "Unlimited" : `${maxAllowed} ${maxAllowed === 1 ? "Time" : "Times"}`}
+                          </p>
+                        </div>
+                        <div className="glass-card-light p-3 rounded-xl">
+                          <p className="text-xs text-foreground/40">My Attempts</p>
+                          <p className={`text-lg font-bold ${isLimitReached ? "text-danger" : "text-white"}`}>
+                            {attemptsTaken} {maxAllowed > 0 ? `/ ${maxAllowed}` : ""}
+                          </p>
+                        </div>
                       </div>
-                      <div className="glass-card-light p-3 rounded-xl">
-                        <p className="text-xs text-foreground/40">Timer Duration</p>
-                        <p className="text-lg font-bold text-gold-400">
-                          {paper.totalTimeMinutes} Mins
-                        </p>
-                      </div>
-                      <div className="glass-card-light p-3 rounded-xl">
-                        <p className="text-xs text-foreground/40">Marking Scheme</p>
-                        <p className="text-lg font-bold">
-                          <span className="text-success">+{paper.marksPerCorrect}</span>
-                          <span className="text-foreground/40 mx-1">/</span>
-                          <span className="text-danger">-{paper.negativeMarks}</span>
-                        </p>
-                      </div>
-                      <div className="glass-card-light p-3 rounded-xl">
-                        <p className="text-xs text-foreground/40">Max Attempts</p>
-                        <p className="text-lg font-bold text-purple-400">
-                          {maxAllowed === 0 ? "Unlimited" : `${maxAllowed} ${maxAllowed === 1 ? "Time" : "Times"}`}
-                        </p>
-                      </div>
-                      <div className="glass-card-light p-3 rounded-xl">
-                        <p className="text-xs text-foreground/40">My Attempts</p>
-                        <p className={`text-lg font-bold ${isLimitReached ? "text-danger" : "text-white"}`}>
-                          {attemptsTaken} {maxAllowed > 0 ? `/ ${maxAllowed}` : ""}
-                        </p>
-                      </div>
-                    </div>
-                  </Card>
-                );
-              })}
-            </div>
+                    </Card>
+                  );
+                })}
+              </div>
             )}
           </div>
         )}
@@ -337,7 +336,7 @@ export default function StudentDashboard() {
                 <p className="text-sm font-bold text-gold-400">
                   {selectedPaperToStart.title}
                 </p>
-                
+
                 {/* Attempt Badge Highlight */}
                 <div className="p-3 rounded-lg bg-purple-500/15 border border-purple-500/30 flex items-center justify-between">
                   <span className="text-xs font-semibold text-foreground/70">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getAllExamResults, deleteExamResult } from "@/lib/firebase";
+import { getAllExamResults, deleteExamResult, getAllStudentUsers, deleteStudentUserInDB, StudentUserRecord } from "@/lib/firebase";
 import { ResultDocument, ExamPaper, ServerQuestion } from "@/lib/types";
 import { formatTime, cn } from "@/lib/utils";
 import { downloadExamScorecardPDF } from "@/lib/generatePdfReport";
@@ -30,7 +30,13 @@ export default function AdminPage() {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [selectedResult, setSelectedResult] = useState<ResultDocument | null>(null);
   const [resultTab, setResultTab] = useState<"summary" | "review">("summary");
-  const [adminNavTab, setAdminNavTab] = useState<"candidates" | "exams">("candidates");
+  const [adminNavTab, setAdminNavTab] = useState<"candidates" | "exams" | "students">("candidates");
+
+  // Admin Registered Students State ("Only Students")
+  const [studentUsers, setStudentUsers] = useState<StudentUserRecord[]>([]);
+  const [loadingStudents, setLoadingStudents] = useState(false);
+  const [studentSearch, setStudentSearch] = useState("");
+  const [deletingStudentUser, setDeletingStudentUser] = useState<StudentUserRecord | null>(null);
 
   // Admin Delete Candidate Confirmation State
   const [deletingCandidate, setDeletingCandidate] = useState<ResultDocument | null>(null);
@@ -199,6 +205,18 @@ export default function AdminPage() {
     setActionSuccessNotice("");
   };
 
+  const fetchStudentUsers = async () => {
+    setLoadingStudents(true);
+    try {
+      const users = await getAllStudentUsers();
+      setStudentUsers(users);
+    } catch (err) {
+      console.error("Error fetching student users:", err);
+    } finally {
+      setLoadingStudents(false);
+    }
+  };
+
   const fetchResults = async () => {
     setLoading(true);
     try {
@@ -206,10 +224,24 @@ export default function AdminPage() {
       setResults(data);
       const synced = await syncExamPapersWithDB();
       setExamPapers(synced);
+      await fetchStudentUsers();
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteStudentUser = async (user: StudentUserRecord) => {
+    setIsDeleting(true);
+    try {
+      await deleteStudentUserInDB(user.id);
+      await fetchStudentUsers();
+      setDeletingStudentUser(null);
+    } catch (err) {
+      console.error("Error deleting student user account:", err);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -293,6 +325,13 @@ export default function AdminPage() {
     }
   }, []);
 
+  // Fetch student accounts when switching to the "Only Students" tab
+  useEffect(() => {
+    if (isAuthenticated && adminNavTab === "students") {
+      fetchStudentUsers();
+    }
+  }, [adminNavTab, isAuthenticated]);
+
   // Filter & Sort Candidate Results
   const filteredResults = results
     .filter((r) =>
@@ -315,6 +354,15 @@ export default function AdminPage() {
       }
       return sortOrder === "desc" ? -comparison : comparison;
     });
+
+  // Filter Registered Student Users ("Only Students")
+  const filteredStudentUsers = studentUsers.filter((u) => {
+    const query = studentSearch.toLowerCase().trim();
+    if (!query) return true;
+    const nameStr = (u.name || "").toLowerCase();
+    const emailStr = (u.email || "").toLowerCase();
+    return nameStr.includes(query) || emailStr.includes(query);
+  });
 
   // Stats
   const totalExamsCount = results.length;
@@ -915,6 +963,136 @@ export default function AdminPage() {
           </div>
         )}
 
+        {/* SECTION 3: Registered Student Accounts ("Only Students") */}
+        {adminNavTab === "students" && (
+          <div className="space-y-6 animate-fade-in">
+            {/* Stat Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <StatCard
+                icon={
+                  <svg className="w-5 h-5 text-gold-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                  </svg>
+                }
+                label="Registered Student Accounts"
+                value={studentUsers.length}
+                color="text-gold-400"
+              />
+              <StatCard
+                icon={
+                  <svg className="w-5 h-5 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                }
+                label="Total Test Submissions"
+                value={results.length}
+                color="text-success"
+              />
+            </div>
+
+            {/* Header + Search Bar */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-bold text-white">Registered Student Accounts</h2>
+                <p className="text-xs text-foreground/40 mt-1">
+                  List of all registered student accounts in the database ({studentUsers.length} students).
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 w-full sm:w-auto">
+                <div className="relative w-full sm:w-72">
+                  <input
+                    type="text"
+                    placeholder="Search students..."
+                    value={studentSearch}
+                    onChange={(e) => setStudentSearch(e.target.value)}
+                    className="w-full pl-9 pr-4 py-2 bg-navy-900 border border-navy-700 rounded-xl text-xs text-white placeholder:text-foreground/40 focus:outline-none focus:border-gold-500/50"
+                  />
+                  <svg className="w-4 h-4 text-foreground/40 absolute left-3 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </div>
+                <Button variant="secondary" size="sm" onClick={fetchStudentUsers} disabled={loadingStudents}>
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Refresh
+                </Button>
+              </div>
+            </div>
+
+            {/* Students Table */}
+            <Card className="p-0 overflow-hidden">
+              {loadingStudents ? (
+                <div className="text-center py-16 text-foreground/45 flex flex-col items-center justify-center gap-3">
+                  <Spinner className="w-8 h-8 text-gold-500" />
+                  <span>Loading registered student accounts...</span>
+                </div>
+              ) : filteredStudentUsers.length === 0 ? (
+                <div className="text-center py-12 text-foreground/45">
+                  No registered student accounts found.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-navy-900/80 border-b border-navy-700/60 text-foreground/45 uppercase tracking-wider text-[10px]">
+                      <tr>
+                        <th className="p-4">Student</th>
+                        <th className="p-4">Email Address</th>
+                        <th className="p-4 text-center">Test Submissions</th>
+                        <th className="p-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-navy-800/40">
+                      {filteredStudentUsers.map((user) => {
+                        const studentSubmissions = results.filter(
+                          (r) =>
+                            (user.email && r.candidateEmail?.toLowerCase() === user.email.toLowerCase()) ||
+                            r.candidateName?.toLowerCase() === user.name?.toLowerCase()
+                        ).length;
+
+                        return (
+                          <tr key={user.id} className="hover:bg-navy-800/30 transition">
+                            <td className="p-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-gold-500/20 text-gold-400 font-bold flex items-center justify-center border border-gold-500/30 text-xs shrink-0">
+                                  {user.name.charAt(0).toUpperCase()}
+                                </div>
+                                <div>
+                                  <p className="font-bold text-white">{user.name}</p>
+                                  <span className="text-[10px] text-success font-medium">Verified Student</span>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="p-4 text-foreground/75 font-mono">
+                              {user.email || "N/A"}
+                            </td>
+                            <td className="p-4 text-center">
+                              <span className="px-2.5 py-1 rounded-full bg-navy-800 text-gold-400 font-bold text-[11px] border border-navy-700">
+                                {studentSubmissions} Submission{studentSubmissions !== 1 ? "s" : ""}
+                              </span>
+                            </td>
+                            <td className="p-4 text-right">
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                className="text-danger border-danger/20 hover:bg-danger/10 text-xs"
+                                onClick={() => setDeletingStudentUser(user)}
+                              >
+                                Delete Account
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Card>
+          </div>
+        )}
+
         {/* Modal 1: Add New Examination */}
         {showAddExamModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -1073,6 +1251,44 @@ export default function AdminPage() {
                   Cancel
                 </Button>
                  <Button variant="danger" className="flex-1 flex items-center justify-center gap-2" disabled={isDeleting} onClick={() => deletingCandidate && handleDeleteCandidate(deletingCandidate)}>
+                  {isDeleting ? (
+                    <>
+                      <Spinner className="w-4 h-4 text-white" />
+                      <span>Deleting...</span>
+                    </>
+                  ) : (
+                    "Confirm Delete"
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Student Account Confirmation Modal */}
+        {deletingStudentUser && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="modal-overlay absolute inset-0" onClick={() => setDeletingStudentUser(null)} />
+            <div className="relative glass-card p-6 max-w-md w-full animate-scale-in text-center space-y-4 border-danger/30">
+              <div className="w-12 h-12 rounded-full bg-danger/15 text-danger flex items-center justify-center mx-auto">
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-bold text-white">Delete {deletingStudentUser.name}?</h3>
+              <p className="text-xs text-foreground/70 leading-relaxed">
+                Are you sure you want to delete the student account for <span className="font-bold text-white">&quot;{deletingStudentUser.name}&quot;</span> ({deletingStudentUser.email})? This action will permanently remove their user credentials from the database.
+              </p>
+              <div className="flex gap-3 pt-2">
+                <Button variant="secondary" className="flex-1" onClick={() => setDeletingStudentUser(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="danger"
+                  className="flex-1 flex items-center justify-center gap-2"
+                  disabled={isDeleting}
+                  onClick={() => handleDeleteStudentUser(deletingStudentUser)}
+                >
                   {isDeleting ? (
                     <>
                       <Spinner className="w-4 h-4 text-white" />
