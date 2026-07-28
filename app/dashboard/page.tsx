@@ -8,6 +8,7 @@ import Button from "@/components/ui/Button";
 import { getExamPapers } from "@/lib/examRegistry";
 import { getAllExamResults } from "@/lib/firebase";
 import { ExamPaper, ResultDocument } from "@/lib/types";
+import { downloadExamScorecardPDF } from "@/lib/generatePdfReport";
 
 export default function StudentDashboard() {
   const router = useRouter();
@@ -265,6 +266,14 @@ export default function StudentDashboard() {
                           <p className="text-success font-semibold">✓ {res.correctCount} Correct</p>
                           <p className="text-danger font-semibold">✗ {res.wrongCount} Wrong</p>
                         </div>
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => downloadExamScorecardPDF(res)}
+                          className="text-xs font-bold text-gold-400 hover:text-white border-gold-500/30"
+                        >
+                          📄 Download PDF
+                        </Button>
                       </div>
                     </div>
                   </Card>

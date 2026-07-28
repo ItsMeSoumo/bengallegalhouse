@@ -3,6 +3,7 @@
 import { ExamResult } from "@/lib/types";
 import { Question } from "@/lib/types";
 import { formatTime, cn } from "@/lib/utils";
+import { downloadExamScorecardPDF } from "@/lib/generatePdfReport";
 import { EXAM_CONFIG } from "@/lib/constants";
 import Card from "@/components/ui/Card";
 import QuestionCard from "./QuestionCard";
@@ -134,8 +135,8 @@ export default function ResultsCard({ result, questions }: ResultsCardProps) {
         </div>
       </Card>
 
-      {/* Review Toggle */}
-      <div className="text-center">
+      {/* Review & Download PDF Actions */}
+      <div className="flex flex-wrap items-center justify-center gap-3">
         <button
           onClick={() => setShowReview(!showReview)}
           className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-navy-700/60 text-foreground/70 hover:text-white hover:bg-navy-600 transition-all cursor-pointer border border-navy-600/40"
@@ -157,6 +158,13 @@ export default function ResultsCard({ result, questions }: ResultsCardProps) {
             />
           </svg>
           {showReview ? "Hide" : "Review"} Answers
+        </button>
+
+        <button
+          onClick={() => downloadExamScorecardPDF(result)}
+          className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gold-500/20 text-gold-400 hover:bg-gold-500 hover:text-navy-950 font-bold transition-all cursor-pointer border border-gold-500/40 shadow-lg"
+        >
+          📄 Download PDF Scorecard
         </button>
       </div>
 
