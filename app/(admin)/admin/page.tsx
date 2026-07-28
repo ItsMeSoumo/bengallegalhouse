@@ -257,7 +257,7 @@ export default function AdminPage() {
           resDoc?.studentDocId,
           resDoc?.candidateEmail,
           resDoc?.candidateName,
-          true // Delete user account from student_users in DB as well
+          false // DO NOT delete student account when deleting an exam result attempt
         );
         setResults((prev) => prev.filter((r) => r.id !== resId));
         if (selectedResult?.id === resId) {
