@@ -7,10 +7,14 @@ import { formatTime, cn } from "@/lib/utils";
 import { downloadExamScorecardPDF } from "@/lib/generatePdfReport";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
+import Spinner from "@/components/ui/Spinner";
 import AdminSidebar from "@/components/layout/AdminSidebar";
 import { EXAM_INFO } from "@/lib/constants";
 import {
   initialExamPapers,
+  getExamPapers,
+  getExamPaperById,
+  syncExamPapersWithDB,
   updateExamPaper,
   addExamPaper,
   deleteExamPaper,
@@ -25,15 +29,16 @@ export default function AdminPage() {
   const [sortBy, setSortBy] = useState<"date" | "score" | "name">("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [selectedResult, setSelectedResult] = useState<ResultDocument | null>(null);
-  const [resultTab, setResultTab] = useState<"summary" | "review" | "attempts">("summary");
+  const [resultTab, setResultTab] = useState<"summary" | "review">("summary");
   const [adminNavTab, setAdminNavTab] = useState<"candidates" | "exams">("candidates");
 
   // Admin Delete Candidate Confirmation State
   const [deletingCandidate, setDeletingCandidate] = useState<ResultDocument | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deletingExamPaper, setDeletingExamPaper] = useState<ExamPaper | null>(null);
 
   // Multi-Exam Management State
-  const [examPapers, setExamPapers] = useState<ExamPaper[]>(initialExamPapers);
+  const [examPapers, setExamPapers] = useState<ExamPaper[]>([]);
   const [activeManagingExam, setActiveManagingExam] = useState<ExamPaper | null>(null);
 
   // Exam Edit Form State (Inside Managing Exam)
@@ -47,7 +52,6 @@ export default function AdminPage() {
   const [maxAttempts, setMaxAttempts] = useState(1);
   const [examStatus, setExamStatus] = useState<"active" | "paused">("active");
   const [settingsSaved, setSettingsSaved] = useState(false);
-  const [confirmRefillStudent, setConfirmRefillStudent] = useState(false);
   const [actionSuccessNotice, setActionSuccessNotice] = useState("");
 
   // Add Exam Modal State
@@ -152,13 +156,19 @@ export default function AdminPage() {
 
   // Delete an Exam
   const handleDeleteExam = (paperId: string) => {
-    if (confirm("Are you sure you want to delete this examination paper?")) {
-      deleteExamPaper(paperId);
-      setExamPapers((prev) => prev.filter((p) => p.id !== paperId));
-      if (activeManagingExam?.id === paperId) {
-        setActiveManagingExam(null);
-      }
+    deleteExamPaper(paperId);
+    setExamPapers(getExamPapers());
+    if (activeManagingExam?.id === paperId) {
+      setActiveManagingExam(null);
     }
+  };
+
+  const resetNewQForm = () => {
+    setNewQText("");
+    setNewOpt0("");
+    setNewOpt1("");
+    setNewOpt2("");
+    setNewOpt3("");
   };
 
   // Add Question to Currently Active Exam
@@ -175,30 +185,17 @@ export default function AdminPage() {
     };
 
     addQuestionToExam(activeManagingExam.id, newQ);
-
-    const updatedExam: ExamPaper = {
-      ...activeManagingExam,
-      questions: [...activeManagingExam.questions, newQ],
-    };
-
-    updateExamPaper(updatedExam);
-    setActiveManagingExam(updatedExam);
-    setExamPapers((prev) =>
-      prev.map((p) => (p.id === updatedExam.id ? updatedExam : p))
-    );
-
-    setShowAddQuestionModal(false);
-    setNewQText("");
-    setNewOpt0("");
-    setNewOpt1("");
-    setNewOpt2("");
-    setNewOpt3("");
+    const updated = getExamPaperById(activeManagingExam.id);
+    if (updated) {
+      setActiveManagingExam(updated);
+      setExamPapers(getExamPapers());
+    }
+    resetNewQForm();
   };
 
   const handleSelectResult = (res: ResultDocument | null) => {
     setSelectedResult(res);
     setResultTab("summary");
-    setConfirmRefillStudent(false);
     setActionSuccessNotice("");
   };
 
@@ -207,6 +204,8 @@ export default function AdminPage() {
     try {
       const data = await getAllExamResults();
       setResults(data);
+      const synced = await syncExamPapersWithDB();
+      setExamPapers(synced);
     } catch (err) {
       console.error(err);
     } finally {
@@ -214,17 +213,28 @@ export default function AdminPage() {
     }
   };
 
-  const handleDeleteCandidate = async (id: string) => {
+  const handleDeleteCandidate = async (target: ResultDocument | string) => {
     setIsDeleting(true);
     try {
-      await deleteExamResult(id);
-      setResults((prev) => prev.filter((r) => r.id !== id));
-      if (selectedResult?.id === id) {
-        setSelectedResult(null);
+      const resDoc = typeof target === "string" ? results.find((r) => r.id === target) : target;
+      const resId = typeof target === "string" ? target : target.id;
+
+      if (resId) {
+        await deleteExamResult(
+          resId,
+          resDoc?.studentDocId,
+          resDoc?.candidateEmail,
+          resDoc?.candidateName,
+          true // Delete user account from student_users in DB as well
+        );
+        setResults((prev) => prev.filter((r) => r.id !== resId));
+        if (selectedResult?.id === resId) {
+          setSelectedResult(null);
+        }
       }
       setDeletingCandidate(null);
     } catch (err) {
-      alert("Failed to delete candidate result. Please check connection.");
+      alert("Failed to delete candidate record from database. Please check connection.");
       console.error(err);
     } finally {
       setIsDeleting(false);
@@ -395,10 +405,17 @@ export default function AdminPage() {
 
               <Button
                 type="submit"
-                className="w-full"
+                className="w-full flex items-center justify-center gap-2"
                 disabled={checkingLogin || !password}
               >
-                {checkingLogin ? "Authenticating..." : "Login to Admin Portal"}
+                {checkingLogin ? (
+                  <>
+                    <Spinner className="w-4 h-4 text-white" />
+                    <span>Authenticating...</span>
+                  </>
+                ) : (
+                  "Login to Admin Portal"
+                )}
               </Button>
             </form>
           </Card>
@@ -502,9 +519,11 @@ export default function AdminPage() {
               </div>
             </Card>
 
-            {/* Candidate Table */}
             {loading ? (
-              <Card className="text-center py-12 text-foreground/45">Loading student submissions...</Card>
+              <Card className="text-center py-16 text-foreground/45 flex flex-col items-center justify-center gap-3">
+                <Spinner className="w-8 h-8 text-gold-500" />
+                <span>Loading student submissions...</span>
+              </Card>
             ) : filteredResults.length === 0 ? (
               <Card className="text-center py-12 text-foreground/45">No student results found.</Card>
             ) : (
@@ -619,52 +638,61 @@ export default function AdminPage() {
                 </div>
 
                 {/* Exam Paper Cards Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {examPapers.map((paper) => (
-                    <Card key={paper.id} variant="highlight" className="p-6 flex flex-col justify-between space-y-6">
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gold-500/20 text-gold-400 border border-gold-500/30">
-                            {paper.subtitle}
-                          </span>
-                          <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${paper.status === "active" ? "bg-success/20 text-success border border-success/30" : "bg-warning/20 text-warning border border-warning/30"}`}>
-                            {paper.status === "active" ? "🟢 LIVE" : "🟡 PAUSED"}
-                          </span>
+                {loading ? (
+                  <Card className="text-center py-16 text-foreground/45 flex flex-col items-center justify-center gap-3">
+                    <Spinner className="w-8 h-8 text-gold-500" />
+                    <span>Loading examinations...</span>
+                  </Card>
+                ) : examPapers.length === 0 ? (
+                  <Card className="text-center py-12 text-foreground/45">No examination papers found.</Card>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {examPapers.map((paper) => (
+                      <Card key={paper.id} variant="highlight" className="p-6 flex flex-col justify-between space-y-6">
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gold-500/20 text-gold-400 border border-gold-500/30">
+                              {paper.subtitle}
+                            </span>
+                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${paper.status === "active" ? "bg-success/20 text-success border border-success/30" : "bg-warning/20 text-warning border border-warning/30"}`}>
+                              {paper.status === "active" ? "🟢 LIVE" : "🟡 PAUSED"}
+                            </span>
+                          </div>
+                          <h3 className="text-xl font-bold text-white">{paper.title}</h3>
+                          <p className="text-xs text-foreground/50 leading-relaxed line-clamp-2">{paper.description}</p>
                         </div>
-                        <h3 className="text-xl font-bold text-white">{paper.title}</h3>
-                        <p className="text-xs text-foreground/50 leading-relaxed line-clamp-2">{paper.description}</p>
-                      </div>
 
-                      <div className="grid grid-cols-3 gap-2 text-center pt-2 border-t border-navy-600/30">
-                        <div className="glass-card-light p-2.5 rounded-xl">
-                          <p className="text-[10px] text-foreground/40 uppercase">Questions</p>
-                          <p className="text-base font-bold text-gold-400">{paper.questions.length}</p>
+                        <div className="grid grid-cols-3 gap-2 text-center pt-2 border-t border-navy-600/30">
+                          <div className="glass-card-light p-2.5 rounded-xl">
+                            <p className="text-[10px] text-foreground/40 uppercase">Questions</p>
+                            <p className="text-base font-bold text-gold-400">{paper.questions.length}</p>
+                          </div>
+                          <div className="glass-card-light p-2.5 rounded-xl">
+                            <p className="text-[10px] text-foreground/40 uppercase">Timer</p>
+                            <p className="text-base font-bold text-white">{paper.totalTimeMinutes} Mins</p>
+                          </div>
+                          <div className="glass-card-light p-2.5 rounded-xl">
+                            <p className="text-[10px] text-foreground/40 uppercase">Marking</p>
+                            <p className="text-base font-bold">
+                              <span className="text-success">+{paper.marksPerCorrect}</span>
+                              <span className="text-foreground/40 font-normal mx-1">/</span>
+                              <span className="text-danger">-{paper.negativeMarks}</span>
+                            </p>
+                          </div>
                         </div>
-                        <div className="glass-card-light p-2.5 rounded-xl">
-                          <p className="text-[10px] text-foreground/40 uppercase">Timer</p>
-                          <p className="text-base font-bold text-white">{paper.totalTimeMinutes} Mins</p>
-                        </div>
-                        <div className="glass-card-light p-2.5 rounded-xl">
-                          <p className="text-[10px] text-foreground/40 uppercase">Marking</p>
-                          <p className="text-base font-bold">
-                            <span className="text-success">+{paper.marksPerCorrect}</span>
-                            <span className="text-foreground/40 font-normal mx-1">/</span>
-                            <span className="text-danger">-{paper.negativeMarks}</span>
-                          </p>
-                        </div>
-                      </div>
 
-                      <div className="flex gap-2 pt-2">
-                        <Button className="flex-1" onClick={() => handleOpenManageExam(paper)}>
-                          ⚙️ Control Exam
-                        </Button>
-                        <Button variant="secondary" size="sm" className="text-danger border-danger/20 hover:bg-danger/10" onClick={() => handleDeleteExam(paper.id)}>
-                          Delete
-                        </Button>
-                      </div>
-                    </Card>
-                  ))}
-                </div>
+                        <div className="flex gap-2 pt-2">
+                          <Button className="flex-1" onClick={() => handleOpenManageExam(paper)}>
+                            ⚙️ Control Exam
+                          </Button>
+                          <Button variant="secondary" size="sm" className="text-danger border-danger/20 hover:bg-danger/10" onClick={() => setDeletingExamPaper(paper)}>
+                            Delete
+                          </Button>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                )}
               </div>
             ) : (
               /* VIEW B: Dedicated Control Panel INSIDE Selected Exam */
@@ -1044,8 +1072,48 @@ export default function AdminPage() {
                 <Button variant="secondary" className="flex-1" onClick={() => setDeletingCandidate(null)}>
                   Cancel
                 </Button>
-                <Button variant="danger" className="flex-1" disabled={isDeleting} onClick={() => deletingCandidate.id && handleDeleteCandidate(deletingCandidate.id)}>
-                  {isDeleting ? "Deleting..." : "Confirm Delete"}
+                 <Button variant="danger" className="flex-1 flex items-center justify-center gap-2" disabled={isDeleting} onClick={() => deletingCandidate && handleDeleteCandidate(deletingCandidate)}>
+                  {isDeleting ? (
+                    <>
+                      <Spinner className="w-4 h-4 text-white" />
+                      <span>Deleting...</span>
+                    </>
+                  ) : (
+                    "Confirm Delete"
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Exam Confirmation Modal */}
+        {deletingExamPaper && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="modal-overlay absolute inset-0" onClick={() => setDeletingExamPaper(null)} />
+            <div className="relative glass-card p-6 max-w-md w-full animate-scale-in text-center space-y-4 border-danger/30">
+              <div className="w-12 h-12 rounded-full bg-danger/15 text-danger flex items-center justify-center mx-auto">
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-bold text-white">Delete {deletingExamPaper.title}?</h3>
+              <p className="text-xs text-foreground/70 leading-relaxed">
+                Are you sure you want to delete <span className="font-bold text-white">&quot;{deletingExamPaper.title}&quot;</span>? This action will permanently remove this examination paper and all its associated questions.
+              </p>
+              <div className="flex gap-3 pt-2">
+                <Button variant="secondary" className="flex-1" onClick={() => setDeletingExamPaper(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="danger"
+                  className="flex-1"
+                  onClick={() => {
+                    handleDeleteExam(deletingExamPaper.id);
+                    setDeletingExamPaper(null);
+                  }}
+                >
+                  Confirm Delete
                 </Button>
               </div>
             </div>
@@ -1078,9 +1146,6 @@ export default function AdminPage() {
                 <button onClick={() => setResultTab("review")} className={cn("px-4 py-2 text-sm font-semibold rounded-lg transition-all cursor-pointer", resultTab === "review" ? "bg-gold-500 text-navy-950 font-bold" : "text-foreground/60 hover:text-white hover:bg-navy-800")}>
                   Question-by-Question Review
                 </button>
-                <button onClick={() => setResultTab("attempts")} className={cn("px-4 py-2 text-sm font-semibold rounded-lg transition-all cursor-pointer flex items-center gap-1.5", resultTab === "attempts" ? "bg-purple-500 text-navy-950 font-bold" : "text-purple-300 hover:text-white hover:bg-navy-800")}>
-                  ⚙️ Manage Attempts
-                </button>
               </div>
               <div className="flex-1 overflow-y-auto pr-1 space-y-4">
                 {resultTab === "summary" ? (
@@ -1100,7 +1165,7 @@ export default function AdminPage() {
                       <DetailRow label="Submitted" value={new Date(selectedResult.submittedAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })} className="col-span-2" />
                     </div>
                   </div>
-                ) : resultTab === "review" ? (
+                ) : (
                   <div className="space-y-4">
                     {(() => {
                       const examPaper = examPapers.find((p) => p.id === selectedResult.examId);
@@ -1155,7 +1220,7 @@ export default function AdminPage() {
 
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                               {question.options.map((optText, optIdx) => {
-                                const isOptionCorrect = optIdx === question.correctAnswer;
+                                const isOptionCorrect = !isUnanswered && optIdx === question.correctAnswer;
                                 const isSelectedByUser = selectedOpt === optIdx;
 
                                 let optClass =
@@ -1221,159 +1286,6 @@ export default function AdminPage() {
                           </div>
                         );
                       });
-                    })()}
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    {(() => {
-                      const candidateExamSubmissions = results.filter(
-                        (x) =>
-                          x.examId === selectedResult.examId &&
-                          ((x.candidateEmail && selectedResult.candidateEmail && x.candidateEmail.toLowerCase() === selectedResult.candidateEmail.toLowerCase()) ||
-                            x.candidateName.toLowerCase().trim() === selectedResult.candidateName.toLowerCase().trim())
-                      );
-                      
-                      const currentPaper = examPapers.find((p) => p.id === selectedResult.examId);
-                      const maxAtt = currentPaper?.maxAttempts ?? 1;
-                      const isLimitReached = maxAtt > 0 && candidateExamSubmissions.length >= maxAtt;
-
-                      return (
-                        <div className="space-y-6">
-                          {/* Overview Status Box */}
-                          <div className="glass-card-light p-5 rounded-2xl border border-navy-700/60 space-y-3">
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <p className="text-xs text-foreground/40 uppercase tracking-wider font-semibold">Student Candidate</p>
-                                <h4 className="text-lg font-bold text-white">{selectedResult.candidateName}</h4>
-                                <p className="text-xs text-gold-400 font-medium">{selectedResult.examTitle || "CULET-2026 Mock Test 2"}</p>
-                              </div>
-                              <span className={`px-3 py-1.5 rounded-xl text-xs font-bold ${isLimitReached ? "bg-danger/20 text-danger border border-danger/30" : "bg-success/20 text-success border border-success/30"}`}>
-                                {isLimitReached ? "🔒 Attempt Limit Reached" : "✅ Exam Attempts Active"}
-                              </span>
-                            </div>
-
-                            <div className="grid grid-cols-3 gap-3 pt-2 text-center text-xs">
-                              <div className="p-3 rounded-xl bg-navy-900 border border-navy-800">
-                                <span className="text-foreground/40 block mb-1">Submissions Recorded</span>
-                                <span className="text-base font-bold text-white">{candidateExamSubmissions.length} Attempt(s)</span>
-                              </div>
-                              <div className="p-3 rounded-xl bg-navy-900 border border-navy-800">
-                                <span className="text-foreground/40 block mb-1">Exam Max Limit</span>
-                                <span className="text-base font-bold text-purple-400">{maxAtt === 0 ? "Unlimited" : `${maxAtt} Allowed`}</span>
-                              </div>
-                              <div className="p-3 rounded-xl bg-navy-900 border border-navy-800">
-                                <span className="text-foreground/40 block mb-1">Attempts Remaining</span>
-                                <span className="text-base font-bold text-gold-400">{maxAtt === 0 ? "Unlimited" : Math.max(0, maxAtt - candidateExamSubmissions.length)}</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Action 1: Reset / Clear Attempts */}
-                          <Card className="p-5 space-y-4 border-l-4 border-l-purple-500">
-                            <div>
-                              <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                                🔄 Reset & Refill Attempt for {selectedResult.candidateName}
-                              </h4>
-                              <p className="text-xs text-foreground/50 mt-1">
-                                Clears the candidate&apos;s previous attempt record for this paper, instantly restoring 1 full attempt allowance so the student can re-take the exam on their dashboard.
-                              </p>
-                            </div>
-
-                            {confirmRefillStudent ? (
-                              <div className="p-4 rounded-xl bg-purple-500/15 border border-purple-500/30 space-y-3 animate-scale-in">
-                                <p className="text-xs font-bold text-purple-200">
-                                  ⚠️ Are you sure you want to reset and refill attempt allowance for &quot;{selectedResult.candidateName}&quot;?
-                                </p>
-                                <div className="flex gap-2">
-                                  <Button
-                                    size="sm"
-                                    onClick={async () => {
-                                      try {
-                                        if (selectedResult.id) {
-                                          await deleteExamResult(selectedResult.id);
-                                          setResults((prev) => prev.filter((r) => r.id !== selectedResult.id));
-                                        }
-                                        setActionSuccessNotice(`✓ Attempts successfully refilled for ${selectedResult.candidateName}! Candidate can now retake this examination.`);
-                                        setConfirmRefillStudent(false);
-                                      } catch (err) {
-                                        console.error("Error refilling attempt:", err);
-                                      }
-                                    }}
-                                    className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2 rounded-lg"
-                                  >
-                                    Yes, Confirm Refill Now
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="secondary"
-                                    onClick={() => setConfirmRefillStudent(false)}
-                                    className="text-xs px-3 py-2"
-                                  >
-                                    Cancel
-                                  </Button>
-                                </div>
-                              </div>
-                            ) : (
-                              <Button
-                                onClick={() => setConfirmRefillStudent(true)}
-                                className="bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-lg"
-                              >
-                                🔄 Refill Student Attempts Now
-                              </Button>
-                            )}
-
-                            {actionSuccessNotice && (
-                              <p className="text-xs font-bold text-success bg-success/15 border border-success/30 p-3 rounded-xl animate-fade-in">
-                                {actionSuccessNotice}
-                              </p>
-                            )}
-                          </Card>
-
-                          {/* Action 2: Change Max Allowed Attempts for this Examination */}
-                          {currentPaper && (
-                            <Card className="p-5 space-y-4 border-l-4 border-l-gold-500">
-                              <div>
-                                <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                                  ⚙️ Modify Exam Max Attempt Limit
-                                </h4>
-                                <p className="text-xs text-foreground/50 mt-1">
-                                  Increase the maximum allowed attempts for &quot;{currentPaper.title}&quot; across all students or grant bonus attempts.
-                                </p>
-                              </div>
-
-                              <div className="flex flex-wrap items-center gap-3">
-                                <Button
-                                  size="sm"
-                                  variant="secondary"
-                                  onClick={() => {
-                                    const updated = { ...currentPaper, maxAttempts: (currentPaper.maxAttempts || 0) + 1 };
-                                    updateExamPaper(updated);
-                                    setExamPapers((prev) => prev.map((p) => p.id === updated.id ? updated : p));
-                                    setActionSuccessNotice(`✓ Granted +1 bonus attempt for "${currentPaper.title}"! (New Max: ${updated.maxAttempts})`);
-                                  }}
-                                  className="text-xs font-bold text-gold-400 border-gold-500/30"
-                                >
-                                  ➕ Grant +1 Bonus Attempt (Total: { (currentPaper.maxAttempts || 0) + 1 })
-                                </Button>
-
-                                <Button
-                                  size="sm"
-                                  variant="secondary"
-                                  onClick={() => {
-                                    const updated = { ...currentPaper, maxAttempts: 0 };
-                                    updateExamPaper(updated);
-                                    setExamPapers((prev) => prev.map((p) => p.id === updated.id ? updated : p));
-                                    setActionSuccessNotice(`✓ Unlimited attempts enabled for "${currentPaper.title}"!`);
-                                  }}
-                                  className="text-xs font-bold text-purple-300 border-purple-500/30"
-                                >
-                                  ♾️ Set Unlimited Attempts
-                                </Button>
-                              </div>
-                            </Card>
-                          )}
-                        </div>
-                      );
                     })()}
                   </div>
                 )}

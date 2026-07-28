@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     });
 
     const rawMarks = correctCount * examPaper.marksPerCorrect - wrongCount * examPaper.negativeMarks;
-    const totalMarks = Math.round(Math.max(0, rawMarks) * 100) / 100;
+    const totalMarks = Math.round(rawMarks * 100) / 100;
     const maxMarks = examQuestions.length * examPaper.marksPerCorrect;
     const percentage = Math.round((totalMarks / maxMarks) * 100 * 100) / 100;
     const passed = percentage >= examPaper.passingPercentage;

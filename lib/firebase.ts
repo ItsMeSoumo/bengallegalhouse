@@ -6,13 +6,14 @@ import {
   addDoc,
   getDocs,
   doc,
+  setDoc,
   deleteDoc,
   query,
   where,
   Timestamp,
 } from "firebase/firestore";
 import { getAuth, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
-import { ExamResult, ResultDocument } from "./types";
+import { ExamResult, ResultDocument, ExamPaper } from "./types";
 
 // ── Firebase Configuration ──────────────────────────────────────────────────
 
@@ -265,22 +266,118 @@ export async function saveExamResult(result: ExamResult): Promise<string> {
   }
 }
 
+// ── Delete Student User ──────────────────────────────────────────────────────
+
+export async function deleteStudentUserInDB(userDocIdOrEmail: string): Promise<boolean> {
+  try {
+    const cleanInput = userDocIdOrEmail.trim().toLowerCase();
+
+    // 1. Direct doc deletion if ID
+    try {
+      await deleteDoc(doc(db, USERS_COLLECTION, userDocIdOrEmail));
+    } catch {
+      // ignore
+    }
+
+    // 2. Query search by email or name
+    const snapshot = await getDocs(collection(db, USERS_COLLECTION));
+    for (const uDoc of snapshot.docs) {
+      const data = uDoc.data();
+      if (
+        uDoc.id === userDocIdOrEmail ||
+        data.email?.toLowerCase() === cleanInput ||
+        data.name?.toLowerCase() === cleanInput
+      ) {
+        await deleteDoc(doc(db, USERS_COLLECTION, uDoc.id));
+      }
+    }
+    return true;
+  } catch (err) {
+    console.error("Error deleting student user in DB:", err);
+    return false;
+  }
+}
+
 // ── Delete Exam Result ──────────────────────────────────────────────────────
 
-export async function deleteExamResult(id: string, parentStudentDocId?: string): Promise<void> {
+export async function deleteExamResult(
+  id: string,
+  parentStudentDocId?: string,
+  candidateEmail?: string,
+  candidateName?: string,
+  deleteUserAccount: boolean = false
+): Promise<void> {
   try {
+    let deleted = false;
+
+    // 1. Delete nested subcollection result if parentStudentDocId is known
     if (parentStudentDocId) {
-      await deleteDoc(doc(db, USERS_COLLECTION, parentStudentDocId, RESULTS_SUBCOLLECTION, id));
-    } else {
-      await deleteDoc(doc(db, RESULTS_SUBCOLLECTION, id));
+      try {
+        await deleteDoc(
+          doc(db, USERS_COLLECTION, parentStudentDocId, RESULTS_SUBCOLLECTION, id)
+        );
+        deleted = true;
+      } catch (e) {
+        console.warn("Direct path result deletion error:", e);
+      }
     }
-  } catch (error) {
-    console.error("Error deleting exam result:", error);
+
+    // 2. Fallback: collectionGroup search across subcollections
+    if (!deleted) {
+      try {
+        const cgSnapshot = await getDocs(collectionGroup(db, RESULTS_SUBCOLLECTION));
+        for (const d of cgSnapshot.docs) {
+          if (d.id === id) {
+            await deleteDoc(d.ref);
+            deleted = true;
+            break;
+          }
+        }
+      } catch (cgErr) {
+        console.warn("Collection group search delete error:", cgErr);
+      }
+    }
+
+    // 3. Fallback: top-level collection
     try {
       await deleteDoc(doc(db, RESULTS_SUBCOLLECTION, id));
     } catch {
       // ignore
     }
+
+    // 4. Delete user account from student_users collection if requested
+    if (deleteUserAccount) {
+      if (parentStudentDocId) {
+        try {
+          await deleteDoc(doc(db, USERS_COLLECTION, parentStudentDocId));
+        } catch {
+          // ignore
+        }
+      }
+
+      const cleanEmail = candidateEmail?.trim().toLowerCase();
+      const cleanName = candidateName?.trim().toLowerCase();
+
+      if (cleanEmail || cleanName) {
+        try {
+          const usersSnapshot = await getDocs(collection(db, USERS_COLLECTION));
+          for (const uDoc of usersSnapshot.docs) {
+            const uData = uDoc.data();
+            if (
+              (cleanEmail && uData.email?.toLowerCase() === cleanEmail) ||
+              (cleanName && uData.name?.toLowerCase() === cleanName)
+            ) {
+              await deleteDoc(doc(db, USERS_COLLECTION, uDoc.id));
+            }
+          }
+        } catch (uErr) {
+          console.warn("User account lookup delete error:", uErr);
+        }
+      }
+    }
+  } catch (error) {
+    console.error("Error deleting exam result / user:", error);
+    throw new Error("Failed to delete record from database");
   }
 }
 
@@ -299,10 +396,11 @@ export async function getAllExamResults(): Promise<ResultDocument[]> {
             collection(db, USERS_COLLECTION, userDoc.id, RESULTS_SUBCOLLECTION)
           );
           subcollSnapshot.docs.forEach((d) => {
-            resultsMap.set(d.id, {
+            resultsMap.set(d.id, ({
               id: d.id,
+              studentDocId: userDoc.id,
               ...d.data(),
-            } as ResultDocument);
+            } as unknown) as ResultDocument);
           });
         } catch (e) {
           console.warn(`Error fetching subcollection for user ${userDoc.id}:`, e);
@@ -317,10 +415,12 @@ export async function getAllExamResults(): Promise<ResultDocument[]> {
       const cgSnapshot = await getDocs(collectionGroup(db, RESULTS_SUBCOLLECTION));
       cgSnapshot.docs.forEach((d) => {
         if (!resultsMap.has(d.id)) {
-          resultsMap.set(d.id, {
+          const parentUserDocId = d.ref.parent.parent?.id;
+          resultsMap.set(d.id, ({
             id: d.id,
+            studentDocId: parentUserDocId,
             ...d.data(),
-          } as ResultDocument);
+          } as unknown) as ResultDocument);
         }
       });
     } catch (cgErr) {
@@ -356,6 +456,57 @@ export async function getAllExamResults(): Promise<ResultDocument[]> {
     console.error("Error fetching exam results:", error);
     return [];
   }
+}
+
+export const EXAMS_COLLECTION = "exam_papers";
+
+export async function saveExamPaperInDB(paper: ExamPaper): Promise<boolean> {
+  try {
+    await setDoc(doc(db, EXAMS_COLLECTION, paper.id), paper, { merge: true });
+    return true;
+  } catch (err) {
+    console.warn("Error saving exam paper in Firestore DB:", err);
+    return false;
+  }
+}
+
+export async function deleteExamPaperInDB(paperId: string): Promise<boolean> {
+  try {
+    await deleteDoc(doc(db, EXAMS_COLLECTION, paperId));
+    return true;
+  } catch (err) {
+    console.warn("Error deleting exam paper in Firestore DB:", err);
+    return false;
+  }
+}
+
+export async function seedExamPapersToDB(initialPapers: ExamPaper[]): Promise<boolean> {
+  try {
+    for (const paper of initialPapers) {
+      await setDoc(doc(db, EXAMS_COLLECTION, paper.id), paper, { merge: true });
+    }
+    return true;
+  } catch (err) {
+    console.warn("Error seeding exam papers to Firestore DB:", err);
+    return false;
+  }
+}
+
+export async function getExamPapersFromDB(initialFallback: ExamPaper[] = []): Promise<ExamPaper[]> {
+  try {
+    const snap = await getDocs(collection(db, EXAMS_COLLECTION));
+    if (!snap.empty) {
+      const list: ExamPaper[] = [];
+      snap.forEach((d) => list.push(d.data() as ExamPaper));
+      return list;
+    } else if (initialFallback.length > 0) {
+      await seedExamPapersToDB(initialFallback);
+      return initialFallback;
+    }
+  } catch (err) {
+    console.warn("Error fetching exam papers from Firestore DB:", err);
+  }
+  return initialFallback;
 }
 
 export { db, auth };

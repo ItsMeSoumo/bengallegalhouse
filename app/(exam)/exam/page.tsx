@@ -6,6 +6,7 @@ import ExamHeader from "@/components/exam/ExamHeader";
 import QuestionCard from "@/components/exam/QuestionCard";
 import QuestionPalette from "@/components/exam/QuestionPalette";
 import Button from "@/components/ui/Button";
+import Spinner from "@/components/ui/Spinner";
 import { useTimer } from "@/hooks/useTimer";
 import { useExam } from "@/hooks/useExam";
 import { questions } from "@/lib/questions";
@@ -16,6 +17,7 @@ import { getAllExamResults } from "@/lib/firebase";
 export default function ExamPage() {
   const router = useRouter();
   const [candidateName, setCandidateName] = useState("");
+  const [isInitializing, setIsInitializing] = useState(true);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showWarningModal, setShowWarningModal] = useState(false);
   const [warningMessage, setWarningMessage] = useState("");
@@ -160,34 +162,43 @@ export default function ExamPage() {
     const activeExamId = sessionStorage.getItem("activeExamId") || "culet-2026-mock-2";
     const paper = getExamPaperById(activeExamId);
 
-    if (paper && paper.maxAttempts > 0) {
-      getAllExamResults().then((results) => {
-        const attempts = results.filter(
-          (r) =>
-            r.examId === paper.id &&
-            ((email && r.candidateEmail && r.candidateEmail.toLowerCase() === email.toLowerCase()) ||
-              r.candidateName.toLowerCase().trim() === name.toLowerCase().trim())
-        ).length;
+    const initExamProcess = async () => {
+      try {
+        if (paper && paper.maxAttempts > 0) {
+          const results = await getAllExamResults();
+          const attempts = results.filter(
+            (r) =>
+              r.examId === paper.id &&
+              ((email && r.candidateEmail && r.candidateEmail.toLowerCase() === email.toLowerCase()) ||
+                r.candidateName.toLowerCase().trim() === name.toLowerCase().trim())
+          ).length;
 
-        if (attempts >= paper.maxAttempts) {
-          setLimitReachedModal({ maxAttempts: paper.maxAttempts, title: paper.title });
-          return;
+          if (attempts >= paper.maxAttempts) {
+            setLimitReachedModal({ maxAttempts: paper.maxAttempts, title: paper.title });
+            return;
+          }
         }
-      });
-    }
 
-    setCandidateName(name);
-    exam.initExam(name);
-    timer.start();
+        setCandidateName(name);
+        exam.initExam(name);
+        timer.start();
+      } catch (err) {
+        console.error("Error initializing exam:", err);
+      } finally {
+        setIsInitializing(false);
+      }
+    };
+
+    initExamProcess();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const answeredCount = exam.state.answers.filter((a) => a !== null).length;
 
-  if (!candidateName) {
+  if (isInitializing || !candidateName) {
     return (
-      <div className="flex flex-1 items-center justify-center">
-        <div className="animate-pulse text-foreground/40">Loading exam...</div>
+      <div className="flex flex-1 items-center justify-center min-h-screen bg-navy-950">
+        <Spinner size="xl" label="Verifying examination authorization & attempt allowances..." />
       </div>
     );
   }
@@ -543,6 +554,13 @@ export default function ExamPage() {
               Return to Student Dashboard
             </Button>
           </div>
+        </div>
+      )}
+      {/* Full-Screen Submission Loader */}
+      {isSubmitting && (
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-navy-950/90 backdrop-blur-md">
+          <Spinner className="w-12 h-12 text-gold-500 mb-4" />
+          <p className="text-sm font-semibold text-foreground/80">Submitting your examination... Please wait.</p>
         </div>
       )}
     </div>

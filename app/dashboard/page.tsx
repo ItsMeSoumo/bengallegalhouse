@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import StudentSidebar from "@/components/layout/StudentSidebar";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
-import { getExamPapers } from "@/lib/examRegistry";
+import Spinner from "@/components/ui/Spinner";
+import { getExamPapers, syncExamPapersWithDB } from "@/lib/examRegistry";
 import { getAllExamResults } from "@/lib/firebase";
 import { ExamPaper, ResultDocument } from "@/lib/types";
 import { downloadExamScorecardPDF } from "@/lib/generatePdfReport";
@@ -17,7 +18,7 @@ export default function StudentDashboard() {
   const [isClient, setIsClient] = useState(false);
   const [activeTab, setActiveTab] = useState<"exams" | "results" | "profile">("exams");
   const [pastResults, setPastResults] = useState<ResultDocument[]>([]);
-  const [loadingResults, setLoadingResults] = useState(false);
+  const [loadingResults, setLoadingResults] = useState(true);
   const [examPapers, setExamPapers] = useState<ExamPaper[]>([]);
 
   // Modals
@@ -36,6 +37,7 @@ export default function StudentDashboard() {
     setStudentName(name);
     setStudentEmail(email);
     setExamPapers(getExamPapers());
+    syncExamPapersWithDB().then(setExamPapers);
     fetchMyResults(name, email);
   }, [router]);
 
@@ -79,9 +81,7 @@ export default function StudentDashboard() {
   if (!isClient || !studentName) {
     return (
       <div className="flex flex-1 items-center justify-center min-h-screen bg-navy-950">
-        <div className="animate-pulse text-foreground/45 text-sm">
-          Verifying security credentials...
-        </div>
+        <Spinner size="xl" label="Verifying student authorization..." />
       </div>
     );
   }
@@ -116,8 +116,12 @@ export default function StudentDashboard() {
               Available Examinations & Practice Papers
             </h2>
 
-            {/* List of Available Exams */}
-            <div className="space-y-6">
+            {loadingResults ? (
+              <Card className="text-center py-16">
+                <Spinner size="lg" label="Retrieving database records and attempt allowances..." />
+              </Card>
+            ) : (
+              <div className="space-y-6">
               {examPapers.map((paper) => {
                 const attemptsTaken = pastResults.filter((r) => r.examId === paper.id).length;
                 const maxAllowed = paper.maxAttempts || 0; // 0 = unlimited
@@ -222,6 +226,7 @@ export default function StudentDashboard() {
                 );
               })}
             </div>
+            )}
           </div>
         )}
 
@@ -233,8 +238,8 @@ export default function StudentDashboard() {
             </h2>
 
             {loadingResults ? (
-              <Card className="text-center py-12 text-foreground/45">
-                Loading your exam history...
+              <Card className="text-center py-16">
+                <Spinner size="lg" label="Fetching your exam submissions from database..." />
               </Card>
             ) : pastResults.length === 0 ? (
               <Card className="text-center py-12 space-y-3">
@@ -249,32 +254,21 @@ export default function StudentDashboard() {
               <div className="space-y-4">
                 {pastResults.map((res, i) => (
                   <Card key={res.id || i} variant="highlight" className="p-5">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="flex items-center justify-between">
                       <div>
                         <span className="text-[11px] font-semibold text-gold-400 uppercase tracking-wider">
                           {res.examTitle || "CULET-2026 Mock Test 2"}
                         </span>
-                        <h3 className="text-lg font-bold text-white mt-0.5">
-                          Score: {res.totalMarks} / {res.maxMarks} ({res.percentage}%)
+                        <h3 className="text-base font-bold text-white mt-0.5 flex items-center gap-2">
+                          <span>✅ Successfully Submitted</span>
                         </h3>
                         <p className="text-xs text-foreground/40 mt-1">
                           Submitted on {new Date(res.submittedAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
                         </p>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <div className="text-right text-xs">
-                          <p className="text-success font-semibold">✓ {res.correctCount} Correct</p>
-                          <p className="text-danger font-semibold">✗ {res.wrongCount} Wrong</p>
-                        </div>
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          onClick={() => downloadExamScorecardPDF(res)}
-                          className="text-xs font-bold text-gold-400 hover:text-white border-gold-500/30"
-                        >
-                          📄 Download PDF
-                        </Button>
-                      </div>
+                      <span className="px-3 py-1.5 rounded-xl text-xs font-bold bg-success/15 text-success border border-success/30">
+                        Submitted
+                      </span>
                     </div>
                   </Card>
                 ))}

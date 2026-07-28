@@ -41,17 +41,17 @@ export function calculateScore(
     correctCount * EXAM_CONFIG.marksPerCorrect -
     wrongCount * EXAM_CONFIG.negativeMarks;
 
-  const totalMarks = Math.round(Math.max(0, rawMarks) * 100) / 100;
+  const totalMarks = Math.round(rawMarks * 100) / 100;
 
   const maxMarks = questions.length * EXAM_CONFIG.marksPerCorrect;
-  const percentage = Math.max(0, (totalMarks / maxMarks) * 100);
+  const percentage = (totalMarks / maxMarks) * 100;
   const passed = percentage >= EXAM_CONFIG.passingPercentage;
 
   return {
     correctCount,
     wrongCount,
     unansweredCount,
-    totalMarks: Math.max(0, totalMarks),
+    totalMarks,
     maxMarks,
     percentage: Math.round(percentage * 100) / 100,
     passed,

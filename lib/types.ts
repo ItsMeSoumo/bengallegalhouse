@@ -87,4 +87,5 @@ export interface ExamResult {
 
 export interface ResultDocument extends ExamResult {
   id?: string;
+  studentDocId?: string;
 }

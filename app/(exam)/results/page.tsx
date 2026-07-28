@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
+import Spinner from "@/components/ui/Spinner";
 import { ExamResult } from "@/lib/types";
 import { EXAM_INFO } from "@/lib/constants";
 
@@ -38,9 +39,7 @@ export default function ResultsPage() {
   if (!result) {
     return (
       <div className="flex flex-1 items-center justify-center min-h-screen bg-navy-950">
-        <div className="animate-pulse text-foreground/40 text-sm">
-          Loading submission confirmation...
-        </div>
+        <Spinner size="xl" label="Loading submission confirmation..." />
       </div>
     );
   }

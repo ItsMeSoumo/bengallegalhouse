@@ -19,9 +19,9 @@ export function downloadExamScorecardPDF(result: ResultDocument): void {
 
   const submittedDateStr = result.submittedAt
     ? new Date(result.submittedAt).toLocaleString("en-IN", {
-        dateStyle: "full",
-        timeStyle: "medium",
-      })
+      dateStyle: "full",
+      timeStyle: "medium",
+    })
     : "N/A";
 
   const questionRowsHTML = questionList
@@ -357,10 +357,9 @@ export function downloadExamScorecardPDF(result: ResultDocument): void {
     <div class="info-item">
       <strong>Student Candidate:</strong> ${escapeHtml(result.candidateName)}
     </div>
-    ${
-      result.candidateEmail
-        ? `<div class="info-item"><strong>Email:</strong> ${escapeHtml(result.candidateEmail)}</div>`
-        : ""
+    ${result.candidateEmail
+      ? `<div class="info-item"><strong>Email:</strong> ${escapeHtml(result.candidateEmail)}</div>`
+      : ""
     }
     <div class="info-item">
       <strong>Submitted Date:</strong> ${submittedDateStr}

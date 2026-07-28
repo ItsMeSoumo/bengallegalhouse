@@ -44,8 +44,9 @@ export default function QuestionCard({
       {/* Options */}
       <div className="space-y-3">
         {question.options.map((option, idx) => {
+          const isUnanswered = selectedAnswer === null || selectedAnswer === undefined;
           const isSelected = selectedAnswer === idx;
-          const isCorrect = isReview && correctAnswer !== undefined && idx === correctAnswer;
+          const isCorrect = isReview && !isUnanswered && correctAnswer !== undefined && idx === correctAnswer;
           const isWrong = isReview && isSelected && correctAnswer !== undefined && idx !== correctAnswer;
 
           return (

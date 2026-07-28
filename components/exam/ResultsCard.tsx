@@ -23,8 +23,9 @@ export default function ResultsCard({ result, questions }: ResultsCardProps) {
   const scorePercent = (result.totalMarks / maxMarks) * 100;
   const radius = 60;
   const circumference = 2 * Math.PI * radius;
+  const visualPercent = Math.max(0, scorePercent);
   const strokeDashoffset =
-    circumference - (scorePercent / 100) * circumference;
+    circumference - (visualPercent / 100) * circumference;
 
   return (
     <div className="space-y-6 animate-slide-up">
