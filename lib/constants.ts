@@ -1,13 +1,23 @@
 import { ExamConfig } from "./types";
 
-// ── Exam Configuration (Hardcoded) ──────────────────────────────────────────
+// ── Exam Configuration ──────────────────────────────────────────────────────
 
 export const EXAM_CONFIG: ExamConfig = {
   totalTime: 7200, // 120 minutes in seconds (2 hours)
-  marksPerCorrect: 4, // +4 for each correct answer
-  negativeMarks: 1, // -1 for each wrong answer
+  marksPerCorrect: 1, // +1 for each correct answer
+  negativeMarks: 0.25, // -0.25 for each wrong answer
   passingPercentage: 40, // 40% to pass
   totalQuestions: 100,
+};
+
+// ── Palette Colors ──────────────────────────────────────────────────────────
+
+export const PALETTE_COLORS = {
+  current: "bg-gold-500 text-navy-950 border-gold-400",
+  answered: "bg-success/80 text-white border-success",
+  markedAnswered: "bg-purple/80 text-white border-purple",
+  marked: "bg-warning/80 text-navy-950 border-warning",
+  unanswered: "bg-navy-700/60 text-foreground/50 border-navy-600/40",
 };
 
 // ── Exam Info Display ───────────────────────────────────────────────────────
@@ -21,7 +31,7 @@ export const EXAM_INFO = {
   rules: [
     `Total Questions: ${EXAM_CONFIG.totalQuestions}`,
     `Time Limit: ${EXAM_CONFIG.totalTime / 60} minutes`,
-    `Correct Answer: +${EXAM_CONFIG.marksPerCorrect} marks`,
+    `Correct Answer: +${EXAM_CONFIG.marksPerCorrect} mark`,
     `Wrong Answer: -${EXAM_CONFIG.negativeMarks} mark`,
     `Unanswered: 0 marks`,
     `Maximum Marks: ${EXAM_CONFIG.totalQuestions * EXAM_CONFIG.marksPerCorrect}`,
@@ -37,15 +47,4 @@ export const EXAM_INFO = {
 export const TIMER_THRESHOLDS = {
   warning: 600, // 10 minutes — turns yellow
   danger: 180, // 3 minutes — turns red + pulse
-};
-
-// ── Question Palette Colors ─────────────────────────────────────────────────
-
-export const PALETTE_COLORS = {
-  current: "#d4a843", // gold
-  answered: "#22c55e", // green
-  markedAnswered: "#a855f7", // purple
-  marked: "#f59e0b", // amber
-  unanswered: "#374151", // grey
-  visited: "#1e293b", // dark slate
 };

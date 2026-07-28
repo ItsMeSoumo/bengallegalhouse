@@ -40,8 +40,8 @@ export default function AdminPage() {
   const [examSubtitle, setExamSubtitle] = useState("");
   const [examDescription, setExamDescription] = useState("");
   const [examTimeMinutes, setExamTimeMinutes] = useState(120);
-  const [marksPerCorrect, setMarksPerCorrect] = useState(4);
-  const [negativeMarks, setNegativeMarks] = useState(1);
+  const [marksPerCorrect, setMarksPerCorrect] = useState(1);
+  const [negativeMarks, setNegativeMarks] = useState(0.25);
   const [passingPercentage, setPassingPercentage] = useState(40);
   const [examStatus, setExamStatus] = useState<"active" | "paused">("active");
   const [settingsSaved, setSettingsSaved] = useState(false);
@@ -124,8 +124,8 @@ export default function AdminPage() {
       subtitle: newExamSubtitle.trim() || "Law Practice Examination",
       description: newExamDescription.trim() || "Assessment paper designed for Law entrance candidates.",
       totalTimeMinutes: newExamTimeMinutes,
-      marksPerCorrect: 4,
-      negativeMarks: 1,
+      marksPerCorrect: 1,
+      negativeMarks: 0.25,
       passingPercentage: 40,
       status: "active",
       questions: defaultQuestions.slice(0, 10), // Seed with default questions
@@ -1031,23 +1031,128 @@ export default function AdminPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-6">
-                    {defaultQuestions.map((question, idx) => {
-                      const selectedOpt = selectedResult.answers[idx];
-                      const isUnanswered = selectedOpt === null;
-                      const isCorrect = !isUnanswered && selectedOpt === question.correctAnswer;
-                      return (
-                        <div key={question.id} className="glass-card-light p-4 rounded-xl space-y-3 border border-navy-700/50">
-                          <div className="flex items-center justify-between border-b border-navy-600/20 pb-2">
-                            <span className="px-2.5 py-0.5 rounded bg-navy-800 text-gold-400 font-bold text-xs">Q{idx + 1}</span>
-                            <span className={cn("text-xs font-semibold px-2 py-0.5 rounded", isUnanswered ? "bg-navy-700 text-foreground/50" : isCorrect ? "bg-success/10 text-success" : "bg-danger/10 text-danger")}>
-                              {isUnanswered ? "UNANSWERED" : isCorrect ? "CORRECT (+4)" : "WRONG (-1)"}
-                            </span>
+                  <div className="space-y-4">
+                    {(() => {
+                      const examPaper = examPapers.find((p) => p.id === selectedResult.examId);
+                      const questionList =
+                        examPaper && examPaper.questions && examPaper.questions.length > 0
+                          ? examPaper.questions
+                          : defaultQuestions;
+
+                      return questionList.map((question, idx) => {
+                        const selectedOpt = selectedResult.answers[idx];
+                        const isUnanswered = selectedOpt === null || selectedOpt === undefined;
+                        const isCorrect = !isUnanswered && selectedOpt === question.correctAnswer;
+
+                        return (
+                          <div
+                            key={question.id || idx}
+                            className="glass-card-light p-4 md:p-5 rounded-xl space-y-3 border border-navy-700/50"
+                          >
+                            <div className="flex items-center justify-between border-b border-navy-600/30 pb-2">
+                              <div className="flex items-center gap-2">
+                                <span className="px-2.5 py-0.5 rounded bg-navy-800 text-gold-400 font-bold text-xs">
+                                  Q{idx + 1}
+                                </span>
+                                {question.subject && (
+                                  <span className="text-[11px] text-foreground/40 font-medium">
+                                    {question.subject}
+                                  </span>
+                                )}
+                              </div>
+                              <span
+                                className={cn(
+                                  "text-xs font-semibold px-2.5 py-1 rounded-md",
+                                  isUnanswered
+                                    ? "bg-navy-800 text-foreground/50 border border-navy-700"
+                                    : isCorrect
+                                    ? "bg-success/15 text-success border border-success/30"
+                                    : "bg-danger/15 text-danger border border-danger/30"
+                                )}
+                              >
+                                {isUnanswered
+                                  ? "UNANSWERED (0)"
+                                  : isCorrect
+                                  ? "CORRECT (+1)"
+                                  : "WRONG (-0.25)"}
+                              </span>
+                            </div>
+
+                            <p className="text-sm md:text-base font-semibold text-white leading-relaxed">
+                              {question.question}
+                            </p>
+
+                            {/* Options List */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
+                              {question.options.map((optText, optIdx) => {
+                                const isSelectedByUser = selectedOpt === optIdx;
+                                const isOptionCorrect = question.correctAnswer === optIdx;
+
+                                let optClass =
+                                  "bg-navy-900/60 border-navy-800 text-foreground/60";
+                                let badge = null;
+
+                                // Only highlight option selections and correct answers IF the question was attempted
+                                if (!isUnanswered) {
+                                  if (isOptionCorrect) {
+                                    optClass =
+                                      "bg-success/15 border-success/50 text-white font-medium shadow-sm shadow-success/10";
+                                    badge = (
+                                      <span className="text-[10px] bg-success/20 text-success font-bold px-1.5 py-0.5 rounded ml-auto">
+                                        ✓ Correct
+                                      </span>
+                                    );
+                                  }
+
+                                  if (isSelectedByUser && !isOptionCorrect) {
+                                    optClass =
+                                      "bg-danger/15 border-danger/50 text-white font-medium shadow-sm shadow-danger/10";
+                                    badge = (
+                                      <span className="text-[10px] bg-danger/20 text-danger font-bold px-1.5 py-0.5 rounded ml-auto">
+                                        ✗ Selected
+                                      </span>
+                                    );
+                                  }
+
+                                  if (isSelectedByUser && isOptionCorrect) {
+                                    badge = (
+                                      <span className="text-[10px] bg-success/30 text-success font-bold px-1.5 py-0.5 rounded ml-auto">
+                                        ✓ Selected & Correct
+                                      </span>
+                                    );
+                                  }
+                                }
+
+                                return (
+                                  <div
+                                    key={optIdx}
+                                    className={cn(
+                                      "p-3 rounded-lg border text-xs flex items-center gap-2.5 transition-all",
+                                      optClass
+                                    )}
+                                  >
+                                    <span
+                                      className={cn(
+                                        "w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px]",
+                                        !isUnanswered && isOptionCorrect
+                                          ? "bg-success text-navy-950"
+                                          : !isUnanswered && isSelectedByUser
+                                          ? "bg-danger text-white"
+                                          : "bg-navy-800 text-foreground/40"
+                                      )}
+                                    >
+                                      {String.fromCharCode(65 + optIdx)}
+                                    </span>
+                                    <span className="flex-1">{optText}</span>
+                                    {badge}
+                                  </div>
+                                );
+                              })}
+                            </div>
                           </div>
-                          <p className="text-sm font-medium text-white">{question.question}</p>
-                        </div>
-                      );
-                    })}
+                        );
+                      });
+                    })()}
                   </div>
                 )}
               </div>

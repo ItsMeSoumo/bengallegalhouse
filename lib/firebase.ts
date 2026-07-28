@@ -8,7 +8,6 @@ import {
   doc,
   deleteDoc,
   query,
-  orderBy,
   where,
   Timestamp,
 } from "firebase/firestore";
@@ -51,6 +50,11 @@ export async function loginWithGoogle(): Promise<{ name: string; email: string }
         "Google Sign-In needs to be enabled in Firebase Console (Authentication -> Sign-in method -> Google)."
       );
     }
+    if (errObj?.code === "auth/unauthorized-domain") {
+      throw new Error(
+        "Domain not authorized in Firebase. Please add 'sohamcbt.vercel.app' in Firebase Console -> Authentication -> Settings -> Authorized Domains."
+      );
+    }
     throw error;
   }
 }
@@ -64,6 +68,13 @@ export interface StudentAuthResult {
   success: boolean;
   user?: { name: string; email: string };
   error?: string;
+}
+
+export interface StudentUserRecord {
+  id: string;
+  name: string;
+  email: string;
+  createdAt?: any;
 }
 
 export async function registerStudentUserInDB(
@@ -183,6 +194,21 @@ export async function authenticateStudentUserInDB(
   }
 }
 
+export async function getAllStudentUsers(): Promise<StudentUserRecord[]> {
+  try {
+    const snapshot = await getDocs(collection(db, USERS_COLLECTION));
+    return snapshot.docs.map((d) => ({
+      id: d.id,
+      name: d.data().name || "Unknown Student",
+      email: d.data().email || "",
+      createdAt: d.data().createdAt,
+    }));
+  } catch (err) {
+    console.error("Error fetching student users:", err);
+    return [];
+  }
+}
+
 // ── Save Exam Result (Stored directly inside student's document subcollection) ──
 
 export async function saveExamResult(result: ExamResult): Promise<string> {
@@ -216,7 +242,7 @@ export async function saveExamResult(result: ExamResult): Promise<string> {
 
     let docRef;
     if (studentDocId) {
-      // ✅ STORE INSIDE NESTED SUBCOLLECTION: student_users/{studentDocId}/exam_results
+      // STORE INSIDE NESTED SUBCOLLECTION: student_users/{studentDocId}/exam_results
       docRef = await addDoc(
         collection(db, USERS_COLLECTION, studentDocId, RESULTS_SUBCOLLECTION),
         {
@@ -250,7 +276,6 @@ export async function deleteExamResult(id: string, parentStudentDocId?: string):
     }
   } catch (error) {
     console.error("Error deleting exam result:", error);
-    // Fallback attempt top-level
     try {
       await deleteDoc(doc(db, RESULTS_SUBCOLLECTION, id));
     } catch {
@@ -259,52 +284,77 @@ export async function deleteExamResult(id: string, parentStudentDocId?: string):
   }
 }
 
-// ── Get All Exam Results (Queries nested subcollections across all students) ──
+// ── Get All Exam Results (Guaranteed multi-layered fetch) ──────────────────
 
 export async function getAllExamResults(): Promise<ResultDocument[]> {
   try {
-    const resultsList: ResultDocument[] = [];
+    const resultsMap = new Map<string, ResultDocument>();
 
-    // 1. Fetch subcollection documents across all student user documents
+    // 1. Fetch all student user docs and iterate through their nested exam_results subcollections
     try {
-      const subcollQuery = query(
-        collectionGroup(db, RESULTS_SUBCOLLECTION),
-        orderBy("createdAt", "desc")
-      );
-      const querySnapshot = await getDocs(subcollQuery);
-      querySnapshot.docs.forEach((d) => {
-        resultsList.push({
-          id: d.id,
-          ...d.data(),
-        } as ResultDocument);
-      });
-    } catch (subErr) {
-      console.warn("Subcollection group query fallback:", subErr);
+      const usersSnapshot = await getDocs(collection(db, USERS_COLLECTION));
+      for (const userDoc of usersSnapshot.docs) {
+        try {
+          const subcollSnapshot = await getDocs(
+            collection(db, USERS_COLLECTION, userDoc.id, RESULTS_SUBCOLLECTION)
+          );
+          subcollSnapshot.docs.forEach((d) => {
+            resultsMap.set(d.id, {
+              id: d.id,
+              ...d.data(),
+            } as ResultDocument);
+          });
+        } catch (e) {
+          console.warn(`Error fetching subcollection for user ${userDoc.id}:`, e);
+        }
+      }
+    } catch (usersErr) {
+      console.warn("Error fetching student users:", usersErr);
     }
 
-    // 2. Fetch top-level fallback documents
+    // 2. Fetch collectionGroup as backup
     try {
-      const topLevelQuery = query(
-        collection(db, RESULTS_SUBCOLLECTION),
-        orderBy("createdAt", "desc")
-      );
-      const topSnapshot = await getDocs(topLevelQuery);
+      const cgSnapshot = await getDocs(collectionGroup(db, RESULTS_SUBCOLLECTION));
+      cgSnapshot.docs.forEach((d) => {
+        if (!resultsMap.has(d.id)) {
+          resultsMap.set(d.id, {
+            id: d.id,
+            ...d.data(),
+          } as ResultDocument);
+        }
+      });
+    } catch (cgErr) {
+      console.warn("CollectionGroup fallback error:", cgErr);
+    }
+
+    // 3. Fetch top-level legacy collection as backup
+    try {
+      const topSnapshot = await getDocs(collection(db, RESULTS_SUBCOLLECTION));
       topSnapshot.docs.forEach((d) => {
-        if (!resultsList.some((r) => r.id === d.id)) {
-          resultsList.push({
+        if (!resultsMap.has(d.id)) {
+          resultsMap.set(d.id, {
             id: d.id,
             ...d.data(),
           } as ResultDocument);
         }
       });
     } catch {
-      // ignore top level if empty
+      // ignore
     }
+
+    const resultsList = Array.from(resultsMap.values());
+
+    // Sort descending by submittedAt / createdAt
+    resultsList.sort((a, b) => {
+      const timeA = new Date(a.submittedAt || 0).getTime();
+      const timeB = new Date(b.submittedAt || 0).getTime();
+      return timeB - timeA;
+    });
 
     return resultsList;
   } catch (error) {
     console.error("Error fetching exam results:", error);
-    throw new Error("Failed to fetch exam results");
+    return [];
   }
 }
 
