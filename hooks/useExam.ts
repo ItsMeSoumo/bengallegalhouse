@@ -11,7 +11,7 @@ interface UseExamReturn {
   prevQuestion: () => void;
   jumpToQuestion: (index: number) => void;
   toggleMark: () => void;
-  initExam: (candidateName: string) => void;
+  initExam: (candidateName: string, restoredState?: Partial<ExamState>) => void;
   incrementTabSwitch: () => number;
 }
 
@@ -29,21 +29,30 @@ export function useExam(questions: Question[]): UseExamReturn {
   });
 
   const initExam = useCallback(
-    (candidateName: string) => {
+    (candidateName: string, restoredState?: Partial<ExamState>) => {
       setState({
         candidateName,
-        currentQuestionIndex: 0,
-        answers: new Array(questions.length).fill(null),
-        markedForReview: new Array(questions.length).fill(false),
-        visitedQuestions: (() => {
-          const visited = new Array(questions.length).fill(false);
-          visited[0] = true;
-          return visited;
-        })(),
-        isSubmitted: false,
-        startTime: Date.now(),
-        endTime: null,
-        tabSwitchCount: 0,
+        currentQuestionIndex: restoredState?.currentQuestionIndex ?? 0,
+        answers:
+          restoredState?.answers && restoredState.answers.length === questions.length
+            ? restoredState.answers
+            : new Array(questions.length).fill(null),
+        markedForReview:
+          restoredState?.markedForReview && restoredState.markedForReview.length === questions.length
+            ? restoredState.markedForReview
+            : new Array(questions.length).fill(false),
+        visitedQuestions:
+          restoredState?.visitedQuestions && restoredState.visitedQuestions.length === questions.length
+            ? restoredState.visitedQuestions
+            : (() => {
+                const visited = new Array(questions.length).fill(false);
+                visited[0] = true;
+                return visited;
+              })(),
+        isSubmitted: restoredState?.isSubmitted || false,
+        startTime: restoredState?.startTime || Date.now(),
+        endTime: restoredState?.endTime || null,
+        tabSwitchCount: restoredState?.tabSwitchCount || 0,
       });
     },
     [questions.length]

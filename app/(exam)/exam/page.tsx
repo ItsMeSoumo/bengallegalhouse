@@ -25,6 +25,7 @@ export default function ExamPage() {
   const [limitReachedModal, setLimitReachedModal] = useState<{ maxAttempts: number; title: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
+  const [restoredSession, setRestoredSession] = useState<any>(null);
 
   const exam = useExam(examQuestions);
   const currentQuestion = examQuestions[exam.state.currentQuestionIndex];
@@ -56,6 +57,11 @@ export default function ExamPage() {
           timeTaken,
         }),
       });
+
+      // Clear active exam session from localStorage upon submission
+      const candidateEmail = sessionStorage.getItem("candidateEmail") || currentState.candidateName;
+      const sKey = `soham_cbt_session_${activeExamId}_${candidateEmail.toLowerCase().trim()}`;
+      localStorage.removeItem(sKey);
 
       const data = await response.json();
       if (data.success) {
@@ -170,15 +176,54 @@ export default function ExamPage() {
         }
 
         const loadedQuestions: PublicQuestion[] = data.questions;
+        const allocatedDurationSec = (data.totalTimeMinutes && data.totalTimeMinutes > 0)
+          ? data.totalTimeMinutes * 60
+          : EXAM_CONFIG.totalTime;
 
-        // 2. Set updated timer duration from database configuration
-        if (data.totalTimeMinutes && data.totalTimeMinutes > 0) {
-          const durationSec = data.totalTimeMinutes * 60;
-          setExamTimeSec(durationSec);
-          sessionStorage.setItem("activeExamTime", String(durationSec));
+        // 2. Check for an active, existing exam session in storage (prevents timer/answer reset on reload)
+        const sKey = `soham_cbt_session_${activeExamId}_${(email || name).toLowerCase().trim()}`;
+        const savedSessionRaw = localStorage.getItem(sKey);
+        let parsedSession: any = null;
+
+        if (savedSessionRaw) {
+          try {
+            parsedSession = JSON.parse(savedSessionRaw);
+          } catch (e) {
+            console.error("Error parsing saved exam session:", e);
+          }
         }
 
-        // 2. Check attempt limits
+        if (parsedSession && parsedSession.startTime) {
+          const elapsedSec = Math.floor((Date.now() - parsedSession.startTime) / 1000);
+          const totalSec = parsedSession.totalTimeSeconds || allocatedDurationSec;
+          const remainingSec = totalSec - elapsedSec;
+
+          if (remainingSec <= 0) {
+            // Exam timer ran out while offline/reloading -> trigger auto-submit
+            setExamQuestions(loadedQuestions);
+            setCandidateName(name);
+            setIsInitializing(false);
+            setTimeout(() => handleSubmit(), 500);
+            return;
+          }
+
+          setExamTimeSec(remainingSec);
+          setRestoredSession(parsedSession);
+        } else {
+          // Fresh exam start — initialize session
+          setExamTimeSec(allocatedDurationSec);
+          const freshSession = {
+            startTime: Date.now(),
+            totalTimeSeconds: allocatedDurationSec,
+            answers: new Array(loadedQuestions.length).fill(null),
+            markedForReview: new Array(loadedQuestions.length).fill(false),
+            visitedQuestions: [true, ...new Array(loadedQuestions.length - 1).fill(false)],
+            tabSwitchCount: 0,
+          };
+          localStorage.setItem(sKey, JSON.stringify(freshSession));
+        }
+
+        // 3. Check attempt limits
         if (data.maxAttempts && data.maxAttempts > 0) {
           const results = await getAllExamResults();
           const attempts = results.filter(
@@ -207,15 +252,50 @@ export default function ExamPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Initialize exam state once questions load from API
+  // Initialize exam state once questions load from API (restores saved session if reloading)
   useEffect(() => {
     if (examQuestions.length > 0 && candidateName) {
-      exam.initExam(candidateName);
+      exam.initExam(candidateName, restoredSession || undefined);
       timer.start();
       setIsInitializing(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [examQuestions, candidateName]);
+
+  // Persist answers, marked questions, and tab violations to storage continuously
+  useEffect(() => {
+    if (examQuestions.length > 0 && candidateName && !isInitializing && !exam.state.isSubmitted) {
+      const activeExamId = sessionStorage.getItem("activeExamId") || "culet-2026-mock-2";
+      const email = sessionStorage.getItem("candidateEmail") || candidateName;
+      const sKey = `soham_cbt_session_${activeExamId}_${email.toLowerCase().trim()}`;
+
+      const existingRaw = localStorage.getItem(sKey);
+      let startTime = exam.state.startTime || Date.now();
+      let totalTimeSeconds = examTimeSec;
+
+      if (existingRaw) {
+        try {
+          const parsed = JSON.parse(existingRaw);
+          if (parsed.startTime) startTime = parsed.startTime;
+          if (parsed.totalTimeSeconds) totalTimeSeconds = parsed.totalTimeSeconds;
+        } catch {
+          // ignore
+        }
+      }
+
+      localStorage.setItem(
+        sKey,
+        JSON.stringify({
+          startTime,
+          totalTimeSeconds,
+          answers: exam.state.answers,
+          markedForReview: exam.state.markedForReview,
+          visitedQuestions: exam.state.visitedQuestions,
+          tabSwitchCount: exam.state.tabSwitchCount,
+        })
+      );
+    }
+  }, [exam.state, examQuestions.length, candidateName, isInitializing, examTimeSec]);
 
   const answeredCount = exam.state.answers.filter((a) => a !== null).length;
 
