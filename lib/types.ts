@@ -1,12 +1,33 @@
 // ── Question Types ──────────────────────────────────────────────────────────
 
-export interface Question {
+export interface PublicQuestion {
   id: number;
   question: string;
   options: string[];
-  correctAnswer: number; // index of correct option (0-3)
   subject: string;
+}
+
+export interface ServerQuestion extends PublicQuestion {
+  correctAnswer: number; // index of correct option (0-3)
   explanation?: string;
+}
+
+// Retain Question interface as alias for public view or admin view
+export type Question = PublicQuestion;
+
+// ── Exam Paper Management ───────────────────────────────────────────────────
+
+export interface ExamPaper {
+  id: string;
+  title: string;
+  subtitle: string;
+  description: string;
+  totalTimeMinutes: number; // in minutes
+  marksPerCorrect: number;
+  negativeMarks: number;
+  passingPercentage: number;
+  status: "active" | "paused";
+  questions: ServerQuestion[];
 }
 
 // ── Exam Configuration ─────────────────────────────────────────────────────
@@ -37,12 +58,17 @@ export interface ExamState {
   isSubmitted: boolean;
   startTime: number;
   endTime: number | null;
+  tabSwitchCount: number;
+  examId?: string;
 }
 
 // ── Results ─────────────────────────────────────────────────────────────────
 
 export interface ExamResult {
+  examId?: string;
+  examTitle?: string;
   candidateName: string;
+  candidateEmail?: string;
   totalQuestions: number;
   correctCount: number;
   wrongCount: number;

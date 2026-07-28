@@ -1,10 +1,10 @@
 "use client";
 
-import { Question } from "@/lib/types";
+import { Question, ServerQuestion } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface QuestionCardProps {
-  question: Question;
+  question: Question | ServerQuestion;
   questionIndex: number;
   totalQuestions: number;
   selectedAnswer: number | null;
@@ -21,6 +21,8 @@ export default function QuestionCard({
   isReview = false,
 }: QuestionCardProps) {
   const optionLabels = ["A", "B", "C", "D"];
+  const correctAnswer = "correctAnswer" in question ? (question as ServerQuestion).correctAnswer : undefined;
+  const explanation = "explanation" in question ? (question as ServerQuestion).explanation : undefined;
 
   return (
     <div className="animate-fade-in">
@@ -43,8 +45,8 @@ export default function QuestionCard({
       <div className="space-y-3">
         {question.options.map((option, idx) => {
           const isSelected = selectedAnswer === idx;
-          const isCorrect = isReview && idx === question.correctAnswer;
-          const isWrong = isReview && isSelected && idx !== question.correctAnswer;
+          const isCorrect = isReview && correctAnswer !== undefined && idx === correctAnswer;
+          const isWrong = isReview && isSelected && correctAnswer !== undefined && idx !== correctAnswer;
 
           return (
             <button
@@ -121,11 +123,11 @@ export default function QuestionCard({
       </div>
 
       {/* Explanation (review mode) */}
-      {isReview && question.explanation && (
+      {isReview && explanation && (
         <div className="mt-6 p-4 rounded-xl bg-info/10 border border-info/20">
           <p className="text-sm text-blue-300">
             <span className="font-semibold">Explanation:</span>{" "}
-            {question.explanation}
+            {explanation}
           </p>
         </div>
       )}

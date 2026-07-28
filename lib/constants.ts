@@ -3,21 +3,21 @@ import { ExamConfig } from "./types";
 // ── Exam Configuration (Hardcoded) ──────────────────────────────────────────
 
 export const EXAM_CONFIG: ExamConfig = {
-  totalTime: 1800, // 30 minutes in seconds
+  totalTime: 7200, // 120 minutes in seconds (2 hours)
   marksPerCorrect: 4, // +4 for each correct answer
   negativeMarks: 1, // -1 for each wrong answer
   passingPercentage: 40, // 40% to pass
-  totalQuestions: 30,
+  totalQuestions: 100,
 };
 
 // ── Exam Info Display ───────────────────────────────────────────────────────
 
 export const EXAM_INFO = {
-  title: "Bengal Legal House",
-  subtitle: "Computer Based Test",
-  examName: "Legal Aptitude Assessment",
+  title: "Law Practice CBT",
+  subtitle: "CULET-2026 Mock Test 2",
+  examName: "Comprehensive Practice Paper for Law Entrance Examination",
   description:
-    "This examination tests your knowledge of Indian law including Constitutional Law, IPC, CrPC, CPC, Evidence Act, Contract Act, and Family Law.",
+    "This examination contains 100 mandatory questions covering Legal Aptitude, General Knowledge, Reasoning, English, and Current Affairs.",
   rules: [
     `Total Questions: ${EXAM_CONFIG.totalQuestions}`,
     `Time Limit: ${EXAM_CONFIG.totalTime / 60} minutes`,
@@ -25,17 +25,18 @@ export const EXAM_INFO = {
     `Wrong Answer: -${EXAM_CONFIG.negativeMarks} mark`,
     `Unanswered: 0 marks`,
     `Maximum Marks: ${EXAM_CONFIG.totalQuestions * EXAM_CONFIG.marksPerCorrect}`,
-    `Passing: ${EXAM_CONFIG.passingPercentage}%`,
-    "No switching between tabs during exam",
-    "Exam auto-submits when time expires",
+    "Strict Anti-Cheating Protocol Enabled",
+    "Tab switching or window minimization is monitored",
+    "Exam auto-submits on 4th tab switch or when timer expires",
+    "Right-click, text copy, and keyboard shortcuts are disabled",
   ],
 };
 
 // ── Timer Thresholds ────────────────────────────────────────────────────────
 
 export const TIMER_THRESHOLDS = {
-  warning: 300, // 5 minutes — turns yellow
-  danger: 60, // 1 minute — turns red + pulse
+  warning: 600, // 10 minutes — turns yellow
+  danger: 180, // 3 minutes — turns red + pulse
 };
 
 // ── Question Palette Colors ─────────────────────────────────────────────────

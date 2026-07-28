@@ -13,15 +13,14 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Bengal Legal House — CBT Platform",
+  title: "Law Practice CBT — Test Platform",
   description:
-    "Computer Based Test platform by Bengal Legal House. Test your knowledge of Indian law including Constitutional Law, IPC, CrPC, CPC, Evidence Act, and more.",
+    "Practice and test your knowledge of law including Constitutional Law, Penal Codes, Procedure Codes, and Evidence Acts.",
   keywords: [
-    "Bengal Legal House",
-    "CBT",
+    "Law CBT",
     "Legal Exam",
-    "Indian Law",
-    "Mock Test",
+    "Law Mock Test",
+    "Legal Aptitude Test",
   ],
 };
 

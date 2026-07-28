@@ -13,25 +13,40 @@ export default function ResultsPage() {
 
   useEffect(() => {
     const storedResult = sessionStorage.getItem("examResult");
-    if (!storedResult) {
+    const candidateName = sessionStorage.getItem("candidateName");
+
+    // If no active candidate session or result, redirect to home login
+    if (!candidateName && !storedResult) {
       router.push("/");
       return;
     }
-    setResult(JSON.parse(storedResult));
+
+    if (storedResult) {
+      setResult(JSON.parse(storedResult));
+    }
   }, [router]);
+
+  const handleReturnToDashboard = () => {
+    sessionStorage.removeItem("examResult");
+    sessionStorage.removeItem("activeExamId");
+    sessionStorage.removeItem("activeExamTitle");
+    sessionStorage.removeItem("activeExamTime");
+    // Preserve candidateName & candidateEmail so student remains logged in!
+    router.push("/dashboard");
+  };
 
   if (!result) {
     return (
-      <div className="flex flex-1 items-center justify-center">
-        <div className="animate-pulse text-foreground/40">
-          Loading submission details...
+      <div className="flex flex-1 items-center justify-center min-h-screen bg-navy-950">
+        <div className="animate-pulse text-foreground/40 text-sm">
+          Loading submission confirmation...
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col flex-1">
+    <div className="flex flex-col flex-1 min-h-screen bg-navy-950">
       {/* Header */}
       <header className="glass-card !rounded-none border-x-0 border-t-0 px-4 md:px-8 py-4">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
@@ -49,7 +64,7 @@ export default function ResultsPage() {
               <h1 className="text-sm font-bold text-gradient-gold">
                 {EXAM_INFO.title}
               </h1>
-              <p className="text-xs text-foreground/40">Exam Status</p>
+              <p className="text-xs text-foreground/40">Exam Submission Confirmed</p>
             </div>
           </div>
         </div>
@@ -78,6 +93,12 @@ export default function ResultsPage() {
               <span className="text-foreground/45">Candidate:</span>
               <span className="font-medium text-white">{result.candidateName}</span>
             </div>
+            {result.examTitle && (
+              <div className="flex justify-between">
+                <span className="text-foreground/45">Paper:</span>
+                <span className="font-medium text-gold-400">{result.examTitle}</span>
+              </div>
+            )}
             <div className="flex justify-between">
               <span className="text-foreground/45">Submitted:</span>
               <span className="font-medium text-white">
@@ -94,20 +115,16 @@ export default function ResultsPage() {
           </div>
 
           <p className="text-xs text-foreground/40 italic">
-            You may now close this window or navigate back to the home page.
+            You remain logged in to your student account. Click below to return to your dashboard.
           </p>
         </Card>
 
-        {/* Action Buttons */}
+        {/* Action Button */}
         <div className="flex justify-center mt-8">
           <Button
             variant="primary"
             size="lg"
-            onClick={() => {
-              sessionStorage.removeItem("examResult");
-              sessionStorage.removeItem("candidateName");
-              router.push("/");
-            }}
+            onClick={handleReturnToDashboard}
           >
             <svg
               className="w-5 h-5"
@@ -122,14 +139,14 @@ export default function ResultsPage() {
                 d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"
               />
             </svg>
-            Back to Home
+            Return to Student Dashboard
           </Button>
         </div>
       </main>
 
       {/* Footer */}
       <footer className="py-4 text-center text-xs text-foreground/20 border-t border-navy-700/30 mt-auto">
-        © {new Date().getFullYear()} Bengal Legal House. All rights reserved.
+        © {new Date().getFullYear()} Law Practice CBT. All rights reserved.
       </footer>
     </div>
   );

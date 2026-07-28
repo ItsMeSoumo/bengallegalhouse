@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import ExamHeader from "@/components/exam/ExamHeader";
 import QuestionCard from "@/components/exam/QuestionCard";
@@ -10,39 +10,140 @@ import { useTimer } from "@/hooks/useTimer";
 import { useExam } from "@/hooks/useExam";
 import { questions } from "@/lib/questions";
 import { EXAM_CONFIG } from "@/lib/constants";
-import { saveExamResult } from "@/lib/firebase";
 
 export default function ExamPage() {
   const router = useRouter();
   const [candidateName, setCandidateName] = useState("");
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [showWarningModal, setShowWarningModal] = useState(false);
+  const [warningMessage, setWarningMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
 
   const exam = useExam(questions);
   const currentQuestion = questions[exam.state.currentQuestionIndex];
 
+  // Ref to track latest state for auto-submit
+  const examStateRef = useRef(exam.state);
+  examStateRef.current = exam.state;
+
+  // Refs for tracking tab switches reliably without React state async latency
+  const tabSwitchRef = useRef(0);
+  const lastViolationTimeRef = useRef(0);
+
   const handleSubmit = useCallback(async () => {
     if (isSubmitting) return;
     setIsSubmitting(true);
     try {
-      const result = exam.submitExam();
-      // Save to Firebase
-      try {
-        await saveExamResult(result);
-      } catch (err) {
-        console.error("Failed to save to Firebase:", err);
-        // Continue anyway — show results even if Firebase fails
-      }
-      // Store result in sessionStorage for results page
-      sessionStorage.setItem("examResult", JSON.stringify(result));
-      router.push("/results");
-    } catch {
-      setIsSubmitting(false);
-    }
-  }, [exam, router, isSubmitting]);
+      const currentState = examStateRef.current;
+      const timeTaken = Math.floor((Date.now() - currentState.startTime) / 1000);
+      const activeExamId = sessionStorage.getItem("activeExamId") || "culet-2026-mock-2";
 
-  const timer = useTimer(EXAM_CONFIG.totalTime, handleSubmit);
+      const response = await fetch("/api/exam/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          examId: activeExamId,
+          candidateName: currentState.candidateName,
+          candidateEmail: sessionStorage.getItem("candidateEmail") || "",
+          answers: currentState.answers,
+          timeTaken,
+        }),
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        sessionStorage.setItem("examResult", JSON.stringify(data.result));
+      } else {
+        console.error("Submission error:", data.error);
+      }
+      router.push("/results");
+    } catch (err) {
+      console.error("Failed to submit exam:", err);
+      router.push("/results");
+    }
+  }, [router, isSubmitting]);
+
+  const [examTimeSec, setExamTimeSec] = useState(EXAM_CONFIG.totalTime);
+
+  useEffect(() => {
+    const savedTime = sessionStorage.getItem("activeExamTime");
+    if (savedTime && !isNaN(Number(savedTime))) {
+      setExamTimeSec(Number(savedTime));
+    }
+  }, []);
+
+  const timer = useTimer(examTimeSec, handleSubmit);
+
+  // ── Tab Switch / Anti-Cheating Monitors ─────────────────────────────────────
+
+  const handleTabSwitchViolation = useCallback(() => {
+    if (exam.state.isSubmitted || isSubmitting) return;
+
+    const now = Date.now();
+    // Ignore duplicate events within 1 second (prevent blur + visibilitychange double-triggering)
+    if (now - lastViolationTimeRef.current < 1000) return;
+    lastViolationTimeRef.current = now;
+
+    tabSwitchRef.current += 1;
+    const count = tabSwitchRef.current;
+    exam.incrementTabSwitch();
+
+    if (count >= 4) {
+      setWarningMessage(
+        "Maximum tab switch violations (4/4) reached! Your exam is being automatically submitted now."
+      );
+      setShowWarningModal(true);
+      setTimeout(() => {
+        handleSubmit();
+      }, 1200);
+    } else {
+      setWarningMessage(
+        `Warning (${count}/3): Navigating away or switching tabs during the exam is strictly prohibited! (Exam auto-submits on 4th violation)`
+      );
+      setShowWarningModal(true);
+    }
+  }, [exam, isSubmitting, handleSubmit]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        handleTabSwitchViolation();
+      }
+    };
+
+    const handleBlur = () => {
+      handleTabSwitchViolation();
+    };
+
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Block F12, Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+U, Ctrl+C, Ctrl+V
+      if (
+        e.key === "F12" ||
+        (e.ctrlKey && e.shiftKey && (e.key === "I" || e.key === "J" || e.key === "i" || e.key === "j")) ||
+        (e.ctrlKey && (e.key === "u" || e.key === "U" || e.key === "c" || e.key === "C"))
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
+    window.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("blur", handleBlur);
+    window.addEventListener("contextmenu", handleContextMenu);
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("contextmenu", handleContextMenu);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [handleTabSwitchViolation]);
 
   // Initialize exam on mount
   useEffect(() => {
@@ -68,7 +169,7 @@ export default function ExamPage() {
   }
 
   return (
-    <div className="flex flex-col min-h-screen">
+    <div className="flex flex-col min-h-screen select-none">
       {/* Header with Timer */}
       <ExamHeader
         timeLeft={timer.timeLeft}
@@ -80,6 +181,16 @@ export default function ExamPage() {
       <div className="flex flex-1 max-w-7xl mx-auto w-full">
         {/* Question Area */}
         <main className="flex-1 p-4 md:p-8">
+          {/* Security Banner */}
+          {exam.state.tabSwitchCount > 0 && (
+            <div className="mb-4 p-3 rounded-xl bg-danger/15 border border-danger/30 text-danger text-xs flex items-center justify-between animate-pulse">
+              <span className="font-semibold">
+                ⚠️ Anti-Cheating Warning: Tab Switches Detected ({exam.state.tabSwitchCount}/3)
+              </span>
+              <span>Auto-submit at 4 violations</span>
+            </div>
+          )}
+
           <div className="glass-card p-6 md:p-8">
             <QuestionCard
               question={currentQuestion}
@@ -271,6 +382,37 @@ export default function ExamPage() {
                 setShowPalette(false);
               }}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Tab Switch Warning Modal */}
+      {showWarningModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="modal-overlay absolute inset-0"
+            onClick={() => setShowWarningModal(false)}
+          />
+          <div className="relative glass-card p-6 max-w-md w-full animate-scale-in space-y-4 text-center border-danger/30">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-danger/15 text-danger mb-2">
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-bold text-white">
+              Anti-Cheating Security Alert
+            </h3>
+            <p className="text-xs text-foreground/70 leading-relaxed">
+              {warningMessage}
+            </p>
+            <Button
+              variant="danger"
+              size="sm"
+              className="w-full mt-2"
+              onClick={() => setShowWarningModal(false)}
+            >
+              I Understand & Return to Exam
+            </Button>
           </div>
         </div>
       )}

@@ -1,5 +1,5 @@
 import { EXAM_CONFIG } from "./constants";
-import { ExamResult, ExamState, Question, QuestionStatus } from "./types";
+import { ExamResult, ExamState, ServerQuestion, QuestionStatus } from "./types";
 
 // ── Time Formatting ─────────────────────────────────────────────────────────
 
@@ -13,7 +13,7 @@ export function formatTime(totalSeconds: number): string {
 
 export function calculateScore(
   answers: (number | null)[],
-  questions: Question[]
+  questions: ServerQuestion[]
 ): {
   correctCount: number;
   wrongCount: number;
@@ -28,9 +28,9 @@ export function calculateScore(
   let unansweredCount = 0;
 
   answers.forEach((answer, index) => {
-    if (answer === null) {
+    if (answer === null || answer === undefined) {
       unansweredCount++;
-    } else if (answer === questions[index].correctAnswer) {
+    } else if (index < questions.length && answer === questions[index].correctAnswer) {
       correctCount++;
     } else {
       wrongCount++;
@@ -77,7 +77,7 @@ export function getQuestionStatus(
 
 export function buildExamResult(
   state: ExamState,
-  questions: Question[]
+  questions: ServerQuestion[]
 ): ExamResult {
   const scoreData = calculateScore(state.answers, questions);
   const timeTaken = state.endTime

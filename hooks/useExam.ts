@@ -1,9 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { ExamState, ExamResult, Question } from "@/lib/types";
-import { EXAM_CONFIG } from "@/lib/constants";
-import { buildExamResult } from "@/lib/utils";
+import { ExamState, Question } from "@/lib/types";
 
 interface UseExamReturn {
   state: ExamState;
@@ -13,8 +11,8 @@ interface UseExamReturn {
   prevQuestion: () => void;
   jumpToQuestion: (index: number) => void;
   toggleMark: () => void;
-  submitExam: () => ExamResult;
   initExam: (candidateName: string) => void;
+  incrementTabSwitch: () => number;
 }
 
 export function useExam(questions: Question[]): UseExamReturn {
@@ -27,6 +25,7 @@ export function useExam(questions: Question[]): UseExamReturn {
     isSubmitted: false,
     startTime: Date.now(),
     endTime: null,
+    tabSwitchCount: 0,
   });
 
   const initExam = useCallback(
@@ -44,6 +43,7 @@ export function useExam(questions: Question[]): UseExamReturn {
         isSubmitted: false,
         startTime: Date.now(),
         endTime: null,
+        tabSwitchCount: 0,
       });
     },
     [questions.length]
@@ -108,22 +108,14 @@ export function useExam(questions: Question[]): UseExamReturn {
     });
   }, []);
 
-  const submitExam = useCallback((): ExamResult => {
-    const endTime = Date.now();
-    setState((prev) => ({
-      ...prev,
-      isSubmitted: true,
-      endTime,
-    }));
-
-    const finalState: ExamState = {
-      ...state,
-      isSubmitted: true,
-      endTime,
-    };
-
-    return buildExamResult(finalState, questions);
-  }, [state, questions]);
+  const incrementTabSwitch = useCallback((): number => {
+    let newCount = 0;
+    setState((prev) => {
+      newCount = prev.tabSwitchCount + 1;
+      return { ...prev, tabSwitchCount: newCount };
+    });
+    return newCount;
+  }, []);
 
   return {
     state,
@@ -133,7 +125,7 @@ export function useExam(questions: Question[]): UseExamReturn {
     prevQuestion,
     jumpToQuestion,
     toggleMark,
-    submitExam,
     initExam,
+    incrementTabSwitch,
   };
 }
