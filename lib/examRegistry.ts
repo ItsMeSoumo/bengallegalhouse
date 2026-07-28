@@ -11,6 +11,7 @@ export const initialExamPapers: ExamPaper[] = [
     marksPerCorrect: 1,
     negativeMarks: 0.25,
     passingPercentage: 40,
+    maxAttempts: 1, // Default 1 attempt per student
     status: "active",
     questions: serverQuestions,
   },
@@ -23,6 +24,7 @@ export const initialExamPapers: ExamPaper[] = [
     marksPerCorrect: 1,
     negativeMarks: 0.25,
     passingPercentage: 50,
+    maxAttempts: 1,
     status: "active",
     questions: serverQuestions.slice(0, 30),
   },
@@ -35,6 +37,7 @@ export const initialExamPapers: ExamPaper[] = [
     marksPerCorrect: 1,
     negativeMarks: 0.25,
     passingPercentage: 40,
+    maxAttempts: 3, // Multi-attempt practice paper
     status: "active",
     questions: serverQuestions.slice(30, 50),
   },

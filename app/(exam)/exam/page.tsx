@@ -10,6 +10,8 @@ import { useTimer } from "@/hooks/useTimer";
 import { useExam } from "@/hooks/useExam";
 import { questions } from "@/lib/questions";
 import { EXAM_CONFIG } from "@/lib/constants";
+import { getExamPaperById } from "@/lib/examRegistry";
+import { getAllExamResults } from "@/lib/firebase";
 
 export default function ExamPage() {
   const router = useRouter();
@@ -17,6 +19,7 @@ export default function ExamPage() {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showWarningModal, setShowWarningModal] = useState(false);
   const [warningMessage, setWarningMessage] = useState("");
+  const [limitReachedModal, setLimitReachedModal] = useState<{ maxAttempts: number; title: string } | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
 
@@ -148,10 +151,31 @@ export default function ExamPage() {
   // Initialize exam on mount
   useEffect(() => {
     const name = sessionStorage.getItem("candidateName");
+    const email = sessionStorage.getItem("candidateEmail") || "";
     if (!name) {
       router.push("/");
       return;
     }
+
+    const activeExamId = sessionStorage.getItem("activeExamId") || "culet-2026-mock-2";
+    const paper = getExamPaperById(activeExamId);
+
+    if (paper && paper.maxAttempts > 0) {
+      getAllExamResults().then((results) => {
+        const attempts = results.filter(
+          (r) =>
+            r.examId === paper.id &&
+            ((email && r.candidateEmail && r.candidateEmail.toLowerCase() === email.toLowerCase()) ||
+              r.candidateName.toLowerCase().trim() === name.toLowerCase().trim())
+        ).length;
+
+        if (attempts >= paper.maxAttempts) {
+          setLimitReachedModal({ maxAttempts: paper.maxAttempts, title: paper.title });
+          return;
+        }
+      });
+    }
+
     setCandidateName(name);
     exam.initExam(name);
     timer.start();
@@ -489,6 +513,35 @@ export default function ExamPage() {
                 {isSubmitting ? "Submitting..." : "Confirm Submit"}
               </Button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── ATTEMPT LIMIT REACHED MODAL ── */}
+      {limitReachedModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="modal-overlay absolute inset-0 bg-navy-950/80 backdrop-blur-md" />
+          <div className="relative glass-card p-6 md:p-8 max-w-md w-full animate-scale-in text-center space-y-5 border border-danger/40">
+            <div className="w-14 h-14 rounded-full bg-danger/15 text-danger border border-danger/30 flex items-center justify-center mx-auto text-2xl font-bold">
+              ⚠️
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-xl font-bold text-white">Attempt Limit Reached</h3>
+              <p className="text-xs text-foreground/60 leading-relaxed">
+                You have already completed the maximum allowed{" "}
+                <span className="font-bold text-gold-400">
+                  {limitReachedModal.maxAttempts} attempt(s)
+                </span>{" "}
+                for <span className="font-semibold text-white">&quot;{limitReachedModal.title}&quot;</span>.
+              </p>
+            </div>
+            <Button
+              variant="secondary"
+              className="w-full font-semibold"
+              onClick={() => router.push("/dashboard")}
+            >
+              Return to Student Dashboard
+            </Button>
           </div>
         </div>
       )}

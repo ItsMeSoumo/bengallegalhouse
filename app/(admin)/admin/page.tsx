@@ -43,6 +43,7 @@ export default function AdminPage() {
   const [marksPerCorrect, setMarksPerCorrect] = useState(1);
   const [negativeMarks, setNegativeMarks] = useState(0.25);
   const [passingPercentage, setPassingPercentage] = useState(40);
+  const [maxAttempts, setMaxAttempts] = useState(1);
   const [examStatus, setExamStatus] = useState<"active" | "paused">("active");
   const [settingsSaved, setSettingsSaved] = useState(false);
 
@@ -84,6 +85,7 @@ export default function AdminPage() {
     setMarksPerCorrect(paper.marksPerCorrect);
     setNegativeMarks(paper.negativeMarks);
     setPassingPercentage(paper.passingPercentage);
+    setMaxAttempts(paper.maxAttempts ?? 1);
     setExamStatus(paper.status);
   };
 
@@ -100,6 +102,7 @@ export default function AdminPage() {
       marksPerCorrect,
       negativeMarks,
       passingPercentage,
+      maxAttempts,
       status: examStatus,
     };
 
@@ -127,6 +130,7 @@ export default function AdminPage() {
       marksPerCorrect: 1,
       negativeMarks: 0.25,
       passingPercentage: 40,
+      maxAttempts: 1,
       status: "active",
       questions: defaultQuestions.slice(0, 10), // Seed with default questions
     };
@@ -507,6 +511,7 @@ export default function AdminPage() {
                         <th className="text-left px-6 py-4 text-xs font-semibold text-foreground/40 uppercase">#</th>
                         <th className="text-left px-6 py-4 text-xs font-semibold text-foreground/40 uppercase">Student</th>
                         <th className="text-left px-6 py-4 text-xs font-semibold text-foreground/40 uppercase">Exam Title</th>
+                        <th className="text-center px-6 py-4 text-xs font-semibold text-foreground/40 uppercase">Attempt</th>
                         <th className="text-center px-6 py-4 text-xs font-semibold text-foreground/40 uppercase">Score</th>
                         <th className="text-center px-6 py-4 text-xs font-semibold text-foreground/40 uppercase">Correct</th>
                         <th className="text-center px-6 py-4 text-xs font-semibold text-foreground/40 uppercase">Wrong</th>
@@ -516,12 +521,36 @@ export default function AdminPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredResults.map((result, index) => (
-                        <tr key={result.id || index} className="border-b border-navy-700/20 hover:bg-navy-800/50 transition-colors">
-                          <td className="px-6 py-4 text-foreground/40">{index + 1}</td>
-                          <td className="px-6 py-4 font-medium text-white">{result.candidateName}</td>
-                          <td className="px-6 py-4 text-xs text-gold-400 font-semibold">{result.examTitle || "CULET-2026 Mock Test 2"}</td>
-                          <td className="px-6 py-4 text-center font-bold text-gold-400">{result.totalMarks} / {result.maxMarks}</td>
+                      {filteredResults.map((result, index) => {
+                        const candidateSubmissions = results
+                          .filter(
+                            (x) =>
+                              x.examId === result.examId &&
+                              ((x.candidateEmail &&
+                                result.candidateEmail &&
+                                x.candidateEmail.toLowerCase() === result.candidateEmail.toLowerCase()) ||
+                                x.candidateName.toLowerCase().trim() === result.candidateName.toLowerCase().trim())
+                          )
+                          .sort(
+                            (a, b) =>
+                              new Date(a.submittedAt || 0).getTime() - new Date(b.submittedAt || 0).getTime()
+                          );
+
+                        const attemptNumber = candidateSubmissions.findIndex((x) => x.id === result.id) + 1;
+                        const paperObj = examPapers.find((p) => p.id === result.examId);
+                        const maxAtt = paperObj?.maxAttempts ?? 1;
+
+                        return (
+                          <tr key={result.id || index} className="border-b border-navy-700/20 hover:bg-navy-800/50 transition-colors">
+                            <td className="px-6 py-4 text-foreground/40">{index + 1}</td>
+                            <td className="px-6 py-4 font-medium text-white">{result.candidateName}</td>
+                            <td className="px-6 py-4 text-xs text-gold-400 font-semibold">{result.examTitle || "CULET-2026 Mock Test 2"}</td>
+                            <td className="px-6 py-4 text-center">
+                              <span className="px-2.5 py-1 rounded-md text-xs font-semibold bg-purple/15 text-purple-300 border border-purple/30 whitespace-nowrap">
+                                Attempt {attemptNumber} of {maxAtt === 0 ? "∞" : maxAtt}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-center font-bold text-gold-400">{result.totalMarks} / {result.maxMarks}</td>
                           <td className="px-6 py-4 text-center text-success font-semibold">{result.correctCount}</td>
                           <td className="px-6 py-4 text-center text-danger font-semibold">{result.wrongCount}</td>
                           <td className="px-6 py-4 text-center text-foreground/50">{formatTime(result.timeTaken)}</td>
@@ -545,8 +574,9 @@ export default function AdminPage() {
                               )}
                             </div>
                           </td>
-                        </tr>
-                      ))}
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -602,7 +632,11 @@ export default function AdminPage() {
                         </div>
                         <div className="glass-card-light p-2.5 rounded-xl">
                           <p className="text-[10px] text-foreground/40 uppercase">Marking</p>
-                          <p className="text-base font-bold text-success">+{paper.marksPerCorrect} / -{paper.negativeMarks}</p>
+                          <p className="text-base font-bold">
+                            <span className="text-success">+{paper.marksPerCorrect}</span>
+                            <span className="text-foreground/40 font-normal mx-1">/</span>
+                            <span className="text-danger">-{paper.negativeMarks}</span>
+                          </p>
                         </div>
                       </div>
 
@@ -708,8 +742,8 @@ export default function AdminPage() {
                     />
                   </div>
 
-                  {/* Marking Scheme */}
-                  <div className="grid grid-cols-3 gap-4">
+                  {/* Marking Scheme & Attempt Control */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div>
                       <label className="block text-xs font-semibold text-foreground/60 uppercase mb-1.5">Marks (+ Correct)</label>
                       <input
@@ -723,6 +757,7 @@ export default function AdminPage() {
                       <label className="block text-xs font-semibold text-foreground/60 uppercase mb-1.5">Deduction (- Wrong)</label>
                       <input
                         type="number"
+                        step="0.05"
                         value={negativeMarks}
                         onChange={(e) => setNegativeMarks(Number(e.target.value))}
                         className="w-full px-4 py-3 rounded-xl bg-navy-900 border border-navy-800 text-white text-sm focus:outline-none focus:border-gold-500/50"
@@ -735,6 +770,16 @@ export default function AdminPage() {
                         value={passingPercentage}
                         onChange={(e) => setPassingPercentage(Number(e.target.value))}
                         className="w-full px-4 py-3 rounded-xl bg-navy-900 border border-navy-800 text-white text-sm focus:outline-none focus:border-gold-500/50"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-foreground/60 uppercase mb-1.5">Max Attempts (0 = Unlimited)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={maxAttempts}
+                        onChange={(e) => setMaxAttempts(Number(e.target.value))}
+                        className="w-full px-4 py-3 rounded-xl bg-navy-900 border border-navy-800 font-bold text-sm focus:outline-none focus:border-gold-500/50 text-gold-400"
                       />
                     </div>
                   </div>

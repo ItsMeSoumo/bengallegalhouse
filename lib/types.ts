@@ -26,6 +26,7 @@ export interface ExamPaper {
   marksPerCorrect: number;
   negativeMarks: number;
   passingPercentage: number;
+  maxAttempts: number; // 0 = unlimited, 1, 2, 3, etc.
   status: "active" | "paused";
   questions: ServerQuestion[];
 }
