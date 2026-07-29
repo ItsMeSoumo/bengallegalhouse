@@ -36,7 +36,7 @@ async function getExamPaperFromDB(examId: string): Promise<ExamPaper | null> {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { candidateName, candidateEmail, answers, timeTaken, examId } = body;
+    const { candidateName, candidateEmail, answers, timeTaken, examId, tabSwitchCount, autoSubmitted } = body;
     const cleanEmail = candidateEmail?.trim().toLowerCase() || "N/A";
 
     console.log(`\n📝 [API POST: /api/exam/submit] Test submission received!
@@ -138,6 +138,8 @@ export async function POST(request: Request) {
       timeTaken: timeTaken || examPaper.totalTimeMinutes * 60,
       submittedAt: new Date().toISOString(),
       answers,
+      tabSwitchCount: typeof tabSwitchCount === "number" ? tabSwitchCount : 0,
+      autoSubmitted: !!autoSubmitted,
     };
 
     // Save to Firebase

@@ -14,6 +14,19 @@ import {
 // Metadata-only exam papers (questions: [] — loaded from DB at runtime)
 export const initialExamPapers: ExamPaper[] = [
   {
+    id: "culet-2026-hard-mixed",
+    title: "CULET-2026 MOCK TEST — HARD MIXED SET",
+    subtitle: "Comprehensive Law Practice Exam",
+    description: "Challenge yourself with a fully mixed 100-question practice set covering General Knowledge (25), English (35), Current Affairs (20), Quantitative Aptitude (10), Logical Reasoning (5), and Legal Aptitude (5).",
+    totalTimeMinutes: 120,
+    marksPerCorrect: 1,
+    negativeMarks: 0.25,
+    passingPercentage: 40,
+    maxAttempts: 1,
+    status: "active",
+    questions: [], // Questions loaded from Firestore — never bundled client-side
+  },
+  {
     id: "culet-2026-mock-2",
     title: "CULET-2026 MOCK TEST 2",
     subtitle: "Law Entrance Practice Examination",

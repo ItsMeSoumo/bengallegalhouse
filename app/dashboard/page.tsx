@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import StudentSidebar from "@/components/layout/StudentSidebar";
 import Card from "@/components/ui/Card";
@@ -20,6 +20,7 @@ export default function StudentDashboard() {
   const [pastResults, setPastResults] = useState<ResultDocument[]>([]);
   const [loadingResults, setLoadingResults] = useState(true);
   const [examPapers, setExamPapers] = useState<ExamPaper[]>([]);
+  const [currentTime, setCurrentTime] = useState(new Date());
 
   // Modals
   const [selectedPaperToStart, setSelectedPaperToStart] = useState<ExamPaper | null>(null);
@@ -40,6 +41,27 @@ export default function StudentDashboard() {
     syncExamPapersWithDB().then(setExamPapers);
     fetchMyResults(name, email);
   }, [router]);
+
+  // Real-time clock tick for schedule gating
+  useEffect(() => {
+    const interval = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Helper: compute schedule status for an exam
+  const getScheduleStatus = useCallback((paper: ExamPaper): "none" | "upcoming" | "live" | "closed" => {
+    if (!paper.scheduledDate || !paper.scheduledStartTime || !paper.scheduledEndTime) return "none";
+    const nowIST = new Date(currentTime.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+    const [sH, sM] = paper.scheduledStartTime.split(":").map(Number);
+    const [eH, eM] = paper.scheduledEndTime.split(":").map(Number);
+    const start = new Date(paper.scheduledDate + "T00:00:00");
+    start.setHours(sH, sM, 0, 0);
+    const end = new Date(paper.scheduledDate + "T00:00:00");
+    end.setHours(eH, eM, 0, 0);
+    if (nowIST < start) return "upcoming";
+    if (nowIST >= start && nowIST <= end) return "live";
+    return "closed";
+  }, [currentTime]);
 
   const fetchMyResults = async (name: string, email: string) => {
     setLoadingResults(true);
@@ -121,6 +143,7 @@ export default function StudentDashboard() {
                   const attemptsTaken = pastResults.filter((r) => r.examId === paper.id).length;
                   const maxAllowed = paper.maxAttempts || 0; // 0 = unlimited
                   const isLimitReached = maxAllowed > 0 && attemptsTaken >= maxAllowed;
+                  const scheduleStatus = getScheduleStatus(paper);
 
                   return (
                     <Card key={paper.id} variant="highlight" className="p-6 space-y-6">
@@ -133,8 +156,8 @@ export default function StudentDashboard() {
                             {maxAllowed > 0 && (
                               <span
                                 className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${isLimitReached
-                                    ? "bg-danger/20 text-danger border border-danger/30"
-                                    : "bg-navy-800 text-purple-300 border border-purple-500/30"
+                                  ? "bg-danger/20 text-danger border border-danger/30"
+                                  : "bg-navy-800 text-purple-300 border border-purple-500/30"
                                   }`}
                               >
                                 Attempts: {attemptsTaken} / {maxAllowed}
@@ -169,6 +192,16 @@ export default function StudentDashboard() {
                               />
                             </svg>
                             <span>Attempt Limit Reached</span>
+                          </div>
+                        ) : scheduleStatus === "upcoming" ? (
+                          <div className="w-full md:w-auto px-5 py-3 rounded-xl text-xs md:text-sm font-bold bg-purple/10 text-purple-300 border border-purple/30 flex items-center justify-center gap-2 shadow-md cursor-not-allowed select-none">
+                            <span className="text-base">🕐</span>
+                            <span>Opens at {paper.scheduledStartTime} IST</span>
+                          </div>
+                        ) : scheduleStatus === "closed" ? (
+                          <div className="w-full md:w-auto px-5 py-3 rounded-xl text-xs md:text-sm font-bold bg-danger/10 text-danger border border-danger/30 flex items-center justify-center gap-2 shadow-md cursor-not-allowed select-none">
+                            <span className="text-base">🔒</span>
+                            <span>Exam Window Closed</span>
                           </div>
                         ) : (
                           <Button
@@ -215,7 +248,47 @@ export default function StudentDashboard() {
                             {attemptsTaken} {maxAllowed > 0 ? `/ ${maxAllowed}` : ""}
                           </p>
                         </div>
-                      </div>
+
+                      {/* Schedule info row */}
+                      {paper.scheduledDate && paper.scheduledStartTime && paper.scheduledEndTime && (
+                        <div className={`col-span-full glass-card-light p-3 rounded-xl flex items-center justify-between gap-2 text-xs font-semibold ${
+                          scheduleStatus === "live" ? "text-success border border-success/20" :
+                          scheduleStatus === "upcoming" ? "text-purple-300 border border-purple/20" :
+                          "text-danger border border-danger/20"
+                        }`}>
+                          <div className="flex items-center gap-2">
+                            <span>{scheduleStatus === "live" ? "🟢" : scheduleStatus === "upcoming" ? "🕐" : "🔒"}</span>
+                            <span>
+                              {scheduleStatus === "live" ? "LIVE NOW" : scheduleStatus === "upcoming" ? "Upcoming" : "Closed"}
+                              {" — "}
+                              {new Date(paper.scheduledDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                              {", "}{paper.scheduledStartTime} – {paper.scheduledEndTime} IST
+                            </span>
+                          </div>
+
+                          {/* Calculated window duration */}
+                          {(() => {
+                            const [sh, sm] = paper.scheduledStartTime.split(":").map(Number);
+                            const [eh, em] = paper.scheduledEndTime.split(":").map(Number);
+                            if (!isNaN(sh) && !isNaN(sm) && !isNaN(eh) && !isNaN(em)) {
+                              let sMins = sh * 60 + sm;
+                              let eMins = eh * 60 + em;
+                              if (eMins <= sMins) eMins += 1440;
+                              const diff = eMins - sMins;
+                              const hrs = Math.floor(diff / 60);
+                              const m = diff % 60;
+                              const durationStr = hrs > 0 && m > 0 ? `${hrs}h ${m}m` : hrs > 0 ? `${hrs} Hour${hrs > 1 ? "s" : ""}` : `${m} Mins`;
+                              return (
+                                <span className="px-2.5 py-0.5 rounded-full bg-navy-900/80 text-foreground/70 border border-white/10 text-[11px] font-bold shrink-0">
+                                  ⏱️ {durationStr} Window
+                                </span>
+                              );
+                            }
+                            return null;
+                          })()}
+                        </div>
+                      )}
+                    </div>
                     </Card>
                   );
                 })}

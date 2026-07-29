@@ -29,6 +29,10 @@ export interface ExamPaper {
   maxAttempts: number; // 0 = unlimited, 1, 2, 3, etc.
   status: "active" | "paused";
   questions: ServerQuestion[];
+  // ── Exam Scheduling (optional) ──
+  scheduledDate?: string;      // ISO date string e.g. "2026-07-30"
+  scheduledStartTime?: string; // 24h format e.g. "13:00"
+  scheduledEndTime?: string;   // 24h format e.g. "14:00"
 }
 
 // ── Exam Configuration ─────────────────────────────────────────────────────
@@ -81,6 +85,8 @@ export interface ExamResult {
   timeTaken: number; // in seconds
   submittedAt: string; // ISO string
   answers: (number | null)[];
+  tabSwitchCount?: number;
+  autoSubmitted?: boolean;
 }
 
 // ── Firebase Document ───────────────────────────────────────────────────────

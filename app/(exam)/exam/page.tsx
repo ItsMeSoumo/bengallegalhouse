@@ -55,6 +55,8 @@ export default function ExamPage() {
           candidateEmail: sessionStorage.getItem("candidateEmail") || "",
           answers: currentState.answers,
           timeTaken,
+          tabSwitchCount: tabSwitchRef.current,
+          autoSubmitted: tabSwitchRef.current >= 4,
         }),
       });
 

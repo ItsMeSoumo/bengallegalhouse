@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { getAllExamResults, deleteExamResult, getAllStudentUsers, deleteStudentUserInDB, StudentUserRecord } from "@/lib/firebase";
 import { ResultDocument, ExamPaper, ServerQuestion } from "@/lib/types";
 import { formatTime, cn } from "@/lib/utils";
@@ -9,6 +9,8 @@ import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Spinner from "@/components/ui/Spinner";
 import AdminSidebar from "@/components/layout/AdminSidebar";
+import ExamScheduler from "@/components/ui/ExamScheduler";
+import NumericInput from "@/components/ui/NumericInput";
 import { EXAM_INFO } from "@/lib/constants";
 import {
   initialExamPapers,
@@ -65,6 +67,44 @@ export default function AdminPage() {
   const [settingsSaved, setSettingsSaved] = useState(false);
   const [actionSuccessNotice, setActionSuccessNotice] = useState("");
 
+  // Exam Scheduling State
+  const [scheduledDate, setScheduledDate] = useState("");
+  const [scheduledStartTime, setScheduledStartTime] = useState("");
+  const [scheduledEndTime, setScheduledEndTime] = useState("");
+
+  // Track if any field in the control panel has unsaved edits
+  const hasUnsavedChanges = useMemo(() => {
+    if (!activeManagingExam) return false;
+    return (
+      examTitle !== activeManagingExam.title ||
+      examSubtitle !== activeManagingExam.subtitle ||
+      examDescription !== activeManagingExam.description ||
+      examTimeMinutes !== activeManagingExam.totalTimeMinutes ||
+      marksPerCorrect !== activeManagingExam.marksPerCorrect ||
+      negativeMarks !== activeManagingExam.negativeMarks ||
+      passingPercentage !== activeManagingExam.passingPercentage ||
+      maxAttempts !== activeManagingExam.maxAttempts ||
+      examStatus !== activeManagingExam.status ||
+      (scheduledDate || "") !== (activeManagingExam.scheduledDate || "") ||
+      (scheduledStartTime || "") !== (activeManagingExam.scheduledStartTime || "") ||
+      (scheduledEndTime || "") !== (activeManagingExam.scheduledEndTime || "")
+    );
+  }, [
+    activeManagingExam,
+    examTitle,
+    examSubtitle,
+    examDescription,
+    examTimeMinutes,
+    marksPerCorrect,
+    negativeMarks,
+    passingPercentage,
+    maxAttempts,
+    examStatus,
+    scheduledDate,
+    scheduledStartTime,
+    scheduledEndTime,
+  ]);
+
   // Add Exam Modal State
   const [showAddExamModal, setShowAddExamModal] = useState(false);
   const [newExamTitle, setNewExamTitle] = useState("");
@@ -105,6 +145,9 @@ export default function AdminPage() {
     setPassingPercentage(paper.passingPercentage);
     setMaxAttempts(paper.maxAttempts ?? 1);
     setExamStatus(paper.status);
+    setScheduledDate(paper.scheduledDate || "");
+    setScheduledStartTime(paper.scheduledStartTime || "");
+    setScheduledEndTime(paper.scheduledEndTime || "");
   };
 
   // Save Settings for currently open Exam
@@ -122,6 +165,9 @@ export default function AdminPage() {
       passingPercentage,
       maxAttempts,
       status: examStatus,
+      scheduledDate: scheduledDate || undefined,
+      scheduledStartTime: scheduledStartTime || undefined,
+      scheduledEndTime: scheduledEndTime || undefined,
     };
 
     updateExamPaper(updated);
@@ -297,7 +343,7 @@ export default function AdminPage() {
     setIsBulkDeleting(true);
     try {
       console.log(`🧹 [BULK DELETE] Starting deletion of ${selectedResults.length} selected exam results...`);
-      
+
       // Perform all deletions in parallel
       await Promise.all(
         selectedResults.map(async (resId) => {
@@ -315,7 +361,7 @@ export default function AdminPage() {
       );
 
       console.log(`🧹 [BULK DELETE] Successfully deleted ${selectedResults.length} exam results.`);
-      
+
       // Update local state
       setResults((prev) => prev.filter((r) => !selectedResults.includes(r.id || "")));
       if (selectedResult && selectedResults.includes(selectedResult.id || "")) {
@@ -699,7 +745,16 @@ export default function AdminPage() {
                               />
                             </td>
                             <td className="px-6 py-4 text-foreground/40">{index + 1}</td>
-                            <td className="px-6 py-4 font-medium text-white whitespace-nowrap">{result.candidateName}</td>
+                            <td className="px-6 py-4 font-medium text-white whitespace-nowrap">
+                              <div className="flex items-center gap-2">
+                                <span>{result.candidateName}</span>
+                                {result.autoSubmitted && (
+                                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-danger/15 text-danger border border-danger/30 flex items-center gap-1 cursor-help" title={`Auto-submitted due to ${result.tabSwitchCount || 4} tab switch violations!`}>
+                                    ⚠️ Cheated
+                                  </span>
+                                )}
+                              </div>
+                            </td>
                             <td className="px-6 py-4 text-xs text-gold-400 font-semibold whitespace-nowrap">{result.examTitle || "CULET-2026 Mock Test 2"}</td>
                             <td className="px-6 py-4 text-center">
                               <span className="px-2.5 py-1 rounded-md text-xs font-semibold bg-purple/15 text-purple-300 border border-purple/30 whitespace-nowrap">
@@ -840,134 +895,225 @@ export default function AdminPage() {
                   </div>
                   <button
                     onClick={() => setExamStatus((prev) => (prev === "active" ? "paused" : "active"))}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold cursor-pointer transition ${
-                      examStatus === "active" ? "bg-success/20 text-success border border-success/30" : "bg-warning/20 text-warning border border-warning/30"
-                    }`}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold cursor-pointer transition ${examStatus === "active" ? "bg-success/20 text-success border border-success/30" : "bg-warning/20 text-warning border border-warning/30"
+                      }`}
                   >
                     {examStatus === "active" ? "🟢 LIVE & ACTIVE" : "🟡 PAUSED FOR MAINTENANCE"}
                   </button>
                 </div>
 
-                {/* Exam Settings Card */}
-                <Card className="p-6 space-y-6">
-                  <h3 className="text-base font-bold text-gold-400 uppercase tracking-wider">
-                    ⚙️ Examination Controls & Timer Settings
-                  </h3>
+                {/* ════ Exam Settings Card — Premium Redesign ════ */}
+                <div className="rounded-2xl border border-white/10 bg-navy-950/40 backdrop-blur-sm overflow-hidden">
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-foreground/60 uppercase mb-1.5">Exam Title</label>
-                      <input
-                        type="text"
-                        value={examTitle}
-                        onChange={(e) => setExamTitle(e.target.value)}
-                        className="w-full px-4 py-3 rounded-xl bg-navy-900 border border-navy-800 text-white text-sm focus:outline-none focus:border-gold-500/50"
-                      />
+                  {/* Card Header */}
+                  <div className="px-6 py-4 border-b border-white/8 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-xl bg-gold-500/15 border border-gold-500/30 flex items-center justify-center text-sm">⚙️</div>
+                      <div>
+                        <h3 className="text-sm font-bold text-white">Examination Controls</h3>
+                        <p className="text-[11px] text-foreground/40">Configure exam settings, scoring and schedule</p>
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-foreground/60 uppercase mb-1.5">Subtitle / Category</label>
-                      <input
-                        type="text"
-                        value={examSubtitle}
-                        onChange={(e) => setExamSubtitle(e.target.value)}
-                        className="w-full px-4 py-3 rounded-xl bg-navy-900 border border-navy-800 text-white text-sm focus:outline-none focus:border-gold-500/50"
-                      />
-                    </div>
+                    <button
+                      onClick={() => setExamStatus((prev) => (prev === "active" ? "paused" : "active"))}
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold cursor-pointer transition border flex items-center gap-1.5 ${examStatus === "active"
+                        ? "bg-success/10 text-success border-success/30 hover:bg-success/15"
+                        : "bg-warning/10 text-warning border-warning/30 hover:bg-warning/15"
+                        }`}
+                    >
+                      <span className={`w-1.5 h-1.5 rounded-full ${examStatus === "active" ? "bg-success animate-pulse" : "bg-warning"}`} />
+                      {examStatus === "active" ? "Live & Active" : "Paused"}
+                    </button>
                   </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-foreground/60 uppercase mb-1.5">Description</label>
-                    <textarea
-                      value={examDescription}
-                      onChange={(e) => setExamDescription(e.target.value)}
-                      rows={2}
-                      className="w-full px-4 py-3 rounded-xl bg-navy-900 border border-navy-800 text-white text-sm focus:outline-none focus:border-gold-500/50"
-                    />
-                  </div>
+                  <div className="p-6 space-y-6">
 
-                  {/* Timer */}
-                  <div>
-                    <label className="block text-xs font-semibold text-foreground/60 uppercase mb-2">
-                      Timer Duration for this Exam (Minutes)
-                    </label>
-                    <div className="grid grid-cols-4 gap-2 mb-3">
-                      {[25, 40, 60, 120].map((mins) => (
-                        <button
-                          key={mins}
-                          type="button"
-                          onClick={() => setExamTimeMinutes(mins)}
-                          className={`py-2 text-xs font-semibold rounded-xl border transition cursor-pointer ${
-                            examTimeMinutes === mins
-                              ? "bg-gold-500 text-navy-950 border-gold-500 font-bold"
-                              : "bg-navy-900 border-navy-700 text-foreground/60 hover:text-white"
+                    {/* ── Section 1: Basic Info ── */}
+                    <div className="space-y-3">
+                      <p className="text-[10px] font-bold text-foreground/30 uppercase tracking-widest">Basic Info</p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium text-foreground/50">Exam Title</label>
+                          <input
+                            type="text"
+                            value={examTitle}
+                            onChange={(e) => setExamTitle(e.target.value)}
+                            placeholder="e.g. CULET-2026 Mock Test 3"
+                            className="w-full px-4 py-3 rounded-xl bg-navy-900/80 border border-white/8 text-white text-sm placeholder:text-foreground/25 focus:outline-none focus:border-gold-500/50 transition"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-medium text-foreground/50">Subtitle / Category</label>
+                          <input
+                            type="text"
+                            value={examSubtitle}
+                            onChange={(e) => setExamSubtitle(e.target.value)}
+                            placeholder="e.g. Law Entrance Practice"
+                            className="w-full px-4 py-3 rounded-xl bg-navy-900/80 border border-white/8 text-white text-sm placeholder:text-foreground/25 focus:outline-none focus:border-gold-500/50 transition"
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-medium text-foreground/50">Description</label>
+                        <textarea
+                          value={examDescription}
+                          onChange={(e) => setExamDescription(e.target.value)}
+                          rows={2}
+                          placeholder="Brief description shown to students on the dashboard..."
+                          className="w-full px-4 py-3 rounded-xl bg-navy-900/80 border border-white/8 text-white text-sm placeholder:text-foreground/25 focus:outline-none focus:border-gold-500/50 transition resize-none"
+                        />
+                      </div>
+                    </div>
+
+                    {/* ── Section 2: Timer & Scoring ── */}
+                    <div className="space-y-3 pt-5 border-t border-white/6">
+                      <p className="text-[10px] font-bold text-foreground/30 uppercase tracking-widest">Timer & Scoring</p>
+
+                      {/* Duration chips + distinct custom input */}
+                      <div className="space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-bold text-foreground/60 uppercase tracking-wider flex items-center gap-1.5">
+                            <span>⏱️</span> Exam Duration
+                          </label>
+                          <span className="text-xs font-extrabold text-gold-400 bg-gold-500/10 px-3 py-1 rounded-lg border border-gold-500/20">
+                            {examTimeMinutes} Minutes Total
+                          </span>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                          {/* Quick Preset Pills */}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {[25, 40, 60, 90, 120].map((mins) => {
+                              const isSelected = examTimeMinutes === mins;
+                              return (
+                                <button
+                                  key={mins}
+                                  type="button"
+                                  onClick={() => setExamTimeMinutes(mins)}
+                                  className={`px-3.5 py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
+                                    isSelected
+                                      ? "bg-gold-500 text-navy-950 border-gold-400 shadow-md shadow-gold-500/20"
+                                      : "bg-navy-900/80 border-white/10 text-foreground/50 hover:text-white hover:border-white/20"
+                                  }`}
+                                >
+                                  {mins}m
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          <div className="hidden sm:block h-6 w-[1px] bg-white/10" />
+
+                          {/* Distinct Custom Duration Box */}
+                          {(() => {
+                            const isCustom = ![25, 40, 60, 90, 120].includes(examTimeMinutes);
+                            return (
+                              <div
+                                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl border transition-all ${
+                                  isCustom
+                                    ? "bg-purple-500/15 border-purple-500/40 text-purple-300 ring-1 ring-purple-500/20"
+                                    : "bg-navy-950/80 border-white/10 text-foreground/60"
+                                }`}
+                              >
+                                <span className="text-xs font-bold text-foreground/50">Custom:</span>
+                                <NumericInput
+                                  value={examTimeMinutes}
+                                  onChange={(v) => setExamTimeMinutes(v)}
+                                  className="w-20 px-3 py-2 rounded-xl bg-navy-900 border border-white/10 text-gold-400 font-bold text-sm text-center focus:outline-none focus:border-gold-500 transition shadow-inner"
+                                />
+                                <span className="text-xs font-semibold text-foreground/50">mins</span>
+                                {isCustom && (
+                                  <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 ml-1">
+                                    Active
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      </div>
+
+                      {/* Scoring tiles */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+                        {[
+                          { label: "Marks / Correct", key: "marksPerCorrect", value: marksPerCorrect, setter: setMarksPerCorrect, step: 0.25, color: "text-emerald-400", accent: "border-emerald-500/20 bg-emerald-500/5", prefix: "+", hint: "per correct answer" },
+                          { label: "Deduction / Wrong", key: "negativeMarks", value: negativeMarks, setter: setNegativeMarks, step: 0.05, color: "text-red-400", accent: "border-red-500/20 bg-red-500/5", prefix: "−", hint: "per wrong answer" },
+                          { label: "Pass Threshold", key: "passingPercentage", value: passingPercentage, setter: setPassingPercentage, step: 1, color: "text-blue-400", accent: "border-blue-500/20 bg-blue-500/5", prefix: "", suffix: "%", hint: "Min score to pass" },
+                          {
+                            label: "Max Attempts",
+                            key: "maxAttempts",
+                            value: maxAttempts,
+                            setter: setMaxAttempts,
+                            step: 1,
+                            color: "text-purple-400",
+                            accent: "border-purple-500/20 bg-purple-500/5",
+                            prefix: "",
+                            hint: "0 = Unlimited",
+                          },
+                        ].map((tile) => (
+                          <div key={tile.key} className={`rounded-xl p-3 border ${tile.accent} flex flex-col justify-between space-y-1.5`}>
+                            <p className="text-[10px] font-semibold text-foreground/40 leading-tight">{tile.label}</p>
+                            <div className="flex items-baseline gap-1">
+                              {tile.prefix && <span className={`text-base font-bold ${tile.color}`}>{tile.prefix}</span>}
+                              <NumericInput
+                                step={tile.step}
+                                min={tile.key === "maxAttempts" ? 0 : undefined}
+                                value={tile.value}
+                                onChange={(val) => (tile.setter as (n: number) => void)(val)}
+                                className={`w-full bg-transparent text-base font-bold ${tile.color} focus:outline-none`}
+                              />
+                              {tile.suffix && <span className={`text-xs font-bold ${tile.color}`}>{tile.suffix}</span>}
+                            </div>
+                            <p className={`text-[9px] font-medium leading-none ${tile.key === "maxAttempts" && tile.value === 0 ? "text-purple-300 font-bold" : "text-foreground/30"}`}>
+                              {tile.hint}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* ── Section 3: Schedule Window ── */}
+                    <div className="pt-5 border-t border-white/6">
+                      <p className="text-[10px] font-bold text-foreground/30 uppercase tracking-widest mb-3">Schedule Window</p>
+                      <ExamScheduler
+                        date={scheduledDate}
+                        startTime={scheduledStartTime}
+                        endTime={scheduledEndTime}
+                        onDateChange={setScheduledDate}
+                        onStartTimeChange={setScheduledStartTime}
+                        onEndTimeChange={setScheduledEndTime}
+                      />
+                    </div>
+
+                    {/* ── Save Row ── */}
+                    <div className="flex items-center justify-between gap-3 pt-4 border-t border-white/6">
+                      {settingsSaved ? (
+                        <span className="text-xs font-bold text-success flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-success/10 border border-success/30">
+                          <svg className="w-4 h-4 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                          ✓ Settings saved successfully!
+                        </span>
+                      ) : (
+                        <span className="text-xs font-semibold text-foreground/50 flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-navy-900 border border-white/8">
+                          ✓ All settings saved &amp; up to date
+                        </span>
+                      )}
+
+                      <Button
+                        onClick={handleSaveExamSettings}
+                        className={`px-8 transition-all ${hasUnsavedChanges
+                          ? "!bg-gold-500 !text-navy-950 font-bold shadow-lg shadow-gold-500/25 ring-2 ring-gold-400"
+                          : ""
                           }`}
-                        >
-                          {mins} Mins
-                        </button>
-                      ))}
+                      >
+                        {hasUnsavedChanges ? "Save Changes (Unsaved)" : "Save Changes"}
+                      </Button>
                     </div>
-                    <input
-                      type="number"
-                      value={examTimeMinutes}
-                      onChange={(e) => setExamTimeMinutes(Number(e.target.value))}
-                      className="w-full px-4 py-3 rounded-xl bg-navy-900 border border-navy-800 text-white text-sm focus:outline-none focus:border-gold-500/50"
-                    />
+
                   </div>
+                </div>
 
-                  {/* Marking Scheme & Attempt Control */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-foreground/60 uppercase mb-1.5">Marks (+ Correct)</label>
-                      <input
-                        type="number"
-                        value={marksPerCorrect}
-                        onChange={(e) => setMarksPerCorrect(Number(e.target.value))}
-                        className="w-full px-4 py-3 rounded-xl bg-navy-900 border border-navy-800 text-white text-sm focus:outline-none focus:border-gold-500/50"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-foreground/60 uppercase mb-1.5">Deduction (- Wrong)</label>
-                      <input
-                        type="number"
-                        step="0.05"
-                        value={negativeMarks}
-                        onChange={(e) => setNegativeMarks(Number(e.target.value))}
-                        className="w-full px-4 py-3 rounded-xl bg-navy-900 border border-navy-800 text-white text-sm focus:outline-none focus:border-gold-500/50"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-foreground/60 uppercase mb-1.5">Passing %</label>
-                      <input
-                        type="number"
-                        value={passingPercentage}
-                        onChange={(e) => setPassingPercentage(Number(e.target.value))}
-                        className="w-full px-4 py-3 rounded-xl bg-navy-900 border border-navy-800 text-white text-sm focus:outline-none focus:border-gold-500/50"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-foreground/60 uppercase mb-1.5">Max Attempts (0 = Unlimited)</label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={maxAttempts}
-                        onChange={(e) => setMaxAttempts(Number(e.target.value))}
-                        className="w-full px-4 py-3 rounded-xl bg-navy-900 border border-navy-800 font-bold text-sm focus:outline-none focus:border-gold-500/50 text-gold-400"
-                      />
-                    </div>
-                  </div>
-
-                  {settingsSaved && (
-                    <p className="text-xs text-success font-semibold flex items-center gap-1.5">
-                      ✓ Examination settings saved successfully!
-                    </p>
-                  )}
-
-                  <Button onClick={handleSaveExamSettings} className="w-full">
-                    Save Exam Controls
-                  </Button>
-                </Card>
-
-                {/* Question Bank inside THIS Exam */}
+                {/* Question Bank inside THIS Exam (Hidden / Commented Out for Now) */}
+                {/* 
                 <div className="space-y-4">
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <h3 className="text-base font-bold text-white">
@@ -978,7 +1124,6 @@ export default function AdminPage() {
                     </Button>
                   </div>
 
-                  {/* Filter */}
                   <Card className="!p-4">
                     <div className="flex flex-col sm:flex-row gap-3">
                       <input
@@ -1000,7 +1145,6 @@ export default function AdminPage() {
                     </div>
                   </Card>
 
-                  {/* Questions List */}
                   <div className="space-y-4">
                     {filteredQuestions.map((q) => (
                       <Card key={q.id} className="p-4 space-y-3">
@@ -1040,6 +1184,7 @@ export default function AdminPage() {
                     ))}
                   </div>
                 </div>
+                */}
               </div>
             )}
           </div>
@@ -1332,7 +1477,7 @@ export default function AdminPage() {
                 <Button variant="secondary" className="flex-1" onClick={() => setDeletingCandidate(null)}>
                   Cancel
                 </Button>
-                 <Button variant="danger" className="flex-1 flex items-center justify-center gap-2" disabled={isDeleting} onClick={() => deletingCandidate && handleDeleteCandidate(deletingCandidate)}>
+                <Button variant="danger" className="flex-1 flex items-center justify-center gap-2" disabled={isDeleting} onClick={() => deletingCandidate && handleDeleteCandidate(deletingCandidate)}>
                   {isDeleting ? (
                     <>
                       <Spinner className="w-4 h-4 text-white" />
@@ -1365,7 +1510,7 @@ export default function AdminPage() {
                 <Button variant="secondary" className="flex-1" onClick={() => setShowBulkDeleteModal(false)}>
                   Cancel
                 </Button>
-                 <Button variant="danger" className="flex-1 flex items-center justify-center gap-2" disabled={isBulkDeleting} onClick={handleBulkDelete}>
+                <Button variant="danger" className="flex-1 flex items-center justify-center gap-2" disabled={isBulkDeleting} onClick={handleBulkDelete}>
                   {isBulkDeleting ? (
                     <>
                       <Spinner className="w-4 h-4 text-white" />
@@ -1494,6 +1639,21 @@ export default function AdminPage() {
                       <DetailRow label="Unanswered" value={`${selectedResult.unansweredCount}`} />
                       <DetailRow label="Time Taken" value={formatTime(selectedResult.timeTaken)} />
                       <DetailRow label="Submitted" value={new Date(selectedResult.submittedAt).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })} className="col-span-2" />
+                      {selectedResult.tabSwitchCount !== undefined && selectedResult.tabSwitchCount > 0 && (
+                        <div className={cn("col-span-2 p-3 rounded-lg flex items-center justify-between border mt-2", selectedResult.autoSubmitted ? "bg-danger/10 border-danger/25 text-danger" : "bg-warning/10 border-warning/25 text-warning-300")}>
+                          <div className="flex items-center gap-2">
+                            <span className="text-base">⚠️</span>
+                            <div className="text-left">
+                              <p className="text-xs font-bold uppercase tracking-wider">Anti-Cheating Monitor</p>
+                              <p className="text-[11px] opacity-80 leading-normal mt-0.5">
+                                {selectedResult.autoSubmitted
+                                  ? `Exam auto-submitted due to reaching maximum tab switch limit (${selectedResult.tabSwitchCount}/4).`
+                                  : `Student switched tabs ${selectedResult.tabSwitchCount} time(s) during the examination.`}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -1533,15 +1693,15 @@ export default function AdminPage() {
                                   isUnanswered
                                     ? "bg-navy-800 text-foreground/40 border border-navy-700"
                                     : isCorrect
-                                    ? "bg-success/15 text-success border border-success/30"
-                                    : "bg-danger/15 text-danger border border-danger/30"
+                                      ? "bg-success/15 text-success border border-success/30"
+                                      : "bg-danger/15 text-danger border border-danger/30"
                                 )}
                               >
                                 {isUnanswered
                                   ? "Unanswered (0)"
                                   : isCorrect
-                                  ? "Correct (+1)"
-                                  : "Wrong (-0.25)"}
+                                    ? "Correct (+1)"
+                                    : "Wrong (-0.25)"}
                               </span>
                             </div>
 
@@ -1602,8 +1762,8 @@ export default function AdminPage() {
                                         !isUnanswered && isOptionCorrect
                                           ? "bg-success text-navy-950"
                                           : !isUnanswered && isSelectedByUser
-                                          ? "bg-danger text-white"
-                                          : "bg-navy-800 text-foreground/40"
+                                            ? "bg-danger text-white"
+                                            : "bg-navy-800 text-foreground/40"
                                       )}
                                     >
                                       {String.fromCharCode(65 + optIdx)}
