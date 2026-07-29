@@ -16,26 +16,34 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0
 const db = getFirestore(app);
 
 export async function GET(request: Request) {
-  try {
-    const { searchParams } = new URL(request.url);
-    const examId = searchParams.get("examId");
+  const { searchParams } = new URL(request.url);
+  const examId = searchParams.get("examId");
+  console.log(`\n📖 [API GET: /api/exam/questions] Loading questions request received for Exam ID: '${examId}'`);
 
+  try {
     if (!examId) {
+      console.warn("⚠️ [API GET: /api/exam/questions] Missing examId parameter");
       return NextResponse.json({ success: false, error: "examId parameter is required" }, { status: 400 });
     }
 
     // 1. Fetch exam paper document from Firestore DB
     let paperData: any = null;
+    console.log(`🔍 [DB READ: questions] Fetching doc from 'exam_papers/${examId}'`);
     const docSnap = await getDoc(doc(db, "exam_papers", examId));
 
     if (docSnap.exists()) {
+      console.log(`🔍 [DB READ: questions] Document exists in Firestore!`);
       paperData = docSnap.data();
     } else {
+      console.log(`🔍 [DB READ: questions] Document ID '${examId}' not found directly. Scanning 'exam_papers' collection...`);
       // Fallback: search collection for matching ID
       const allSnap = await getDocs(collection(db, "exam_papers"));
       const found = allSnap.docs.find((d) => d.id === examId || d.data().id === examId);
       if (found) {
+        console.log(`🔍 [DB READ: questions] Document found in collection scan.`);
         paperData = found.data();
+      } else {
+        console.warn(`🔍 [DB READ: questions] Exam paper ID '${examId}' does not exist anywhere.`);
       }
     }
 
@@ -49,6 +57,7 @@ export async function GET(request: Request) {
       ({ correctAnswer, explanation, ...publicFields }: { correctAnswer?: number; explanation?: string; [key: string]: any }) => publicFields
     );
 
+    console.log(`📖 [API GET: /api/exam/questions] Returning ${publicQuestions.length} public questions for '${paperData.title}'`);
     return NextResponse.json({
       success: true,
       examId: paperData.id || examId,

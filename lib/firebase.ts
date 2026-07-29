@@ -36,6 +36,7 @@ const googleProvider = new GoogleAuthProvider();
 // ── Google Sign In Helper ───────────────────────────────────────────────────
 
 export async function loginWithGoogle(): Promise<{ name: string; email: string }> {
+  console.log("🔑 [GOOGLE AUTH] Initializing Google Sign-In popup...");
   try {
     const result = await signInWithPopup(auth, googleProvider);
     const user = result.user;
@@ -43,6 +44,7 @@ export async function loginWithGoogle(): Promise<{ name: string; email: string }
       name: user.displayName || user.email || "Student Candidate",
       email: user.email || "",
     };
+    console.log("🔑 [GOOGLE AUTH] Popup sign-in successful. User details:", studentInfo);
 
     // Auto-register Google student user document in student_users collection
     if (studentInfo.email) {
@@ -94,17 +96,21 @@ export async function registerStudentUserInDB(
   email: string,
   password: string
 ): Promise<StudentAuthResult> {
+  const cleanEmail = email.trim().toLowerCase();
+  console.log(`\n📝 [DB WRITE: signup] Attempting to register user:
+      - Name: ${name}
+      - Email: ${cleanEmail}`);
   try {
-    const cleanEmail = email.trim().toLowerCase();
-
     // Check if user already exists with this email ID
     const q = query(
       collection(db, USERS_COLLECTION),
       where("email", "==", cleanEmail)
     );
+    console.log(`🔍 [DB READ: signup check] Checking if email '${cleanEmail}' exists in collection '${USERS_COLLECTION}'`);
     const snapshot = await getDocs(q);
     if (!snapshot.empty) {
       const existingData = snapshot.docs[0].data();
+      console.log(`📝 [DB WRITE: signup] User already exists in DB:`, existingData);
       return {
         success: true,
         user: { name: existingData.name || name.trim(), email: cleanEmail },
@@ -112,12 +118,14 @@ export async function registerStudentUserInDB(
     }
 
     // Save student user document in student_users collection
-    await addDoc(collection(db, USERS_COLLECTION), {
+    console.log(`📝 [DB WRITE: signup] Adding new user document to '${USERS_COLLECTION}'...`);
+    const newDoc = await addDoc(collection(db, USERS_COLLECTION), {
       name: name.trim(),
       email: cleanEmail,
       password: password,
       createdAt: Timestamp.now(),
     });
+    console.log(`📝 [DB WRITE: signup] Successfully registered new user. Firestore Doc ID: ${newDoc.id}`);
 
     return {
       success: true,
@@ -136,18 +144,20 @@ export async function authenticateStudentUserInDB(
   input: string,
   password: string
 ): Promise<StudentAuthResult> {
+  const cleanInput = input.trim().toLowerCase();
+  console.log(`\n🔑 [DB READ: login] Authenticating student. Input (email/name): '${cleanInput}'`);
   try {
-    const cleanInput = input.trim().toLowerCase();
-
     // Query by email first
     let q = query(
       collection(db, USERS_COLLECTION),
       where("email", "==", cleanInput)
     );
+    console.log(`🔍 [DB READ: login] Querying '${USERS_COLLECTION}' by email == '${cleanInput}'`);
     let snapshot = await getDocs(q);
 
     // If not found by email, query by name
     if (snapshot.empty) {
+      console.log(`🔍 [DB READ: login] Email not found. Querying '${USERS_COLLECTION}' by name == '${input.trim()}'`);
       q = query(
         collection(db, USERS_COLLECTION),
         where("name", "==", input.trim())
@@ -157,6 +167,7 @@ export async function authenticateStudentUserInDB(
 
     // Fallback search
     if (snapshot.empty) {
+      console.log(`🔍 [DB READ: login] Direct query empty. Performing fallback collection scan...`);
       const allDocs = await getDocs(collection(db, USERS_COLLECTION));
       const match = allDocs.docs.find((d) => {
         const data = d.data();
@@ -168,18 +179,22 @@ export async function authenticateStudentUserInDB(
 
       if (match) {
         const userData = match.data();
+        console.log(`🔍 [DB READ: login] Match found in scan:`, userData);
         if (userData.password !== password) {
+          console.warn(`🔑 [DB READ: login] Password mismatch for user: ${userData.email}`);
           return {
             success: false,
             error: "Incorrect password. Please try again.",
           };
         }
+        console.log(`🔑 [DB READ: login] Authentication successful for: ${userData.email}`);
         return {
           success: true,
           user: { name: userData.name, email: userData.email },
         };
       }
 
+      console.warn(`🔑 [DB READ: login] No account found matching: '${cleanInput}'`);
       return {
         success: false,
         error: "No account found with this email. Please Sign Up first!",
@@ -187,13 +202,16 @@ export async function authenticateStudentUserInDB(
     }
 
     const userData = snapshot.docs[0].data();
+    console.log(`🔍 [DB READ: login] Direct match found:`, userData);
     if (userData.password !== password) {
+      console.warn(`🔑 [DB READ: login] Password mismatch for user: ${userData.email}`);
       return {
         success: false,
         error: "Incorrect password. Please try again.",
       };
     }
 
+    console.log(`🔑 [DB READ: login] Authentication successful for: ${userData.email}`);
     return {
       success: true,
       user: { name: userData.name, email: userData.email },
@@ -228,8 +246,12 @@ export async function getAllStudentUsers(): Promise<StudentUserRecord[]> {
 // ── Save Exam Result (Stored directly inside student's document subcollection) ──
 
 export async function saveExamResult(result: ExamResult): Promise<string> {
+  const cleanEmail = result.candidateEmail?.trim().toLowerCase();
+  console.log(`\n💾 [DB WRITE: saveResult] Saving exam results for:
+      - Candidate Name: ${result.candidateName}
+      - Candidate Email: ${cleanEmail}
+      - Exam ID: ${result.examId}`);
   try {
-    const cleanEmail = result.candidateEmail?.trim().toLowerCase();
     let studentDocId = "";
 
     // 1. Locate the student's document in student_users collection
@@ -238,9 +260,11 @@ export async function saveExamResult(result: ExamResult): Promise<string> {
         collection(db, USERS_COLLECTION),
         where("email", "==", cleanEmail)
       );
+      console.log(`🔍 [DB READ: saveResult] Locating student doc ID by email: '${cleanEmail}'`);
       const snapshot = await getDocs(q);
       if (!snapshot.empty) {
         studentDocId = snapshot.docs[0].id;
+        console.log(`🔍 [DB READ: saveResult] Student doc ID found: '${studentDocId}'`);
       }
     }
 
@@ -250,14 +274,18 @@ export async function saveExamResult(result: ExamResult): Promise<string> {
         collection(db, USERS_COLLECTION),
         where("name", "==", result.candidateName.trim())
       );
+      console.log(`🔍 [DB READ: saveResult] Locating student doc ID by name: '${result.candidateName.trim()}'`);
       const snapshot = await getDocs(q);
       if (!snapshot.empty) {
         studentDocId = snapshot.docs[0].id;
+        console.log(`🔍 [DB READ: saveResult] Student doc ID found (by name): '${studentDocId}'`);
       }
     }
 
     let docRef;
     if (studentDocId) {
+      const path = `${USERS_COLLECTION}/${studentDocId}/${RESULTS_SUBCOLLECTION}`;
+      console.log(`💾 [DB WRITE: saveResult] Writing document to subcollection path: '${path}'`);
       // STORE INSIDE NESTED SUBCOLLECTION: student_users/{studentDocId}/exam_results
       docRef = await addDoc(
         collection(db, USERS_COLLECTION, studentDocId, RESULTS_SUBCOLLECTION),
@@ -267,6 +295,7 @@ export async function saveExamResult(result: ExamResult): Promise<string> {
         }
       );
     } else {
+      console.log(`💾 [DB WRITE: saveResult] No student ID found. Saving to top-level fallback: '${RESULTS_SUBCOLLECTION}'`);
       // Top level fallback if student user doc is not initialized
       docRef = await addDoc(collection(db, RESULTS_SUBCOLLECTION), {
         ...result,
@@ -274,6 +303,7 @@ export async function saveExamResult(result: ExamResult): Promise<string> {
       });
     }
 
+    console.log(`💾 [DB WRITE: saveResult] Exam result saved successfully. Created Doc ID: '${docRef.id}'`);
     return docRef.id;
   } catch (error) {
     console.error("Error saving nested exam result:", error);
@@ -405,7 +435,19 @@ export async function getAllExamResults(): Promise<ResultDocument[]> {
     // 1. Fetch all student user docs and iterate through their nested exam_results subcollections
     try {
       const usersSnapshot = await getDocs(collection(db, USERS_COLLECTION));
+      console.log(`\n🚨 [DATABASE READ TRACE] Total ${usersSnapshot.docs.length} users fetched from '${USERS_COLLECTION}' collection!`);
+      
+      let subcollectionCount = 0;
       for (const userDoc of usersSnapshot.docs) {
+        subcollectionCount++;
+        const userData = userDoc.data();
+        console.log(`👉 [DATABASE READ TRACE] Querying nested '${RESULTS_SUBCOLLECTION}' subcollection for:
+            - User ID: ${userDoc.id}
+            - Name: ${userData.name || "N/A"}
+            - Email: ${userData.email || "N/A"}
+            - Created At: ${userData.createdAt && typeof userData.createdAt.toDate === 'function' ? userData.createdAt.toDate().toISOString() : "N/A"}
+            (${subcollectionCount}/${usersSnapshot.docs.length})`);
+        
         try {
           const subcollSnapshot = await getDocs(
             collection(db, USERS_COLLECTION, userDoc.id, RESULTS_SUBCOLLECTION)
@@ -421,6 +463,7 @@ export async function getAllExamResults(): Promise<ResultDocument[]> {
           console.warn(`Error fetching subcollection for user ${userDoc.id}:`, e);
         }
       }
+      console.log(`🚨 [DATABASE READ TRACE] Done. Queried ${subcollectionCount} subcollections in total!\n`);
     } catch (usersErr) {
       console.warn("Error fetching student users:", usersErr);
     }
@@ -469,6 +512,99 @@ export async function getAllExamResults(): Promise<ResultDocument[]> {
     return resultsList;
   } catch (error) {
     console.error("Error fetching exam results:", error);
+    return [];
+  }
+}
+
+export async function getCandidateExamResults(
+  candidateName: string,
+  candidateEmail?: string
+): Promise<ResultDocument[]> {
+  try {
+    const cleanEmail = candidateEmail?.trim().toLowerCase();
+    let studentDocId = "";
+
+    console.log(`\n🔍 [DB READ: getCandidateResults] Looking up candidate records for:
+        - Email: '${cleanEmail}'
+        - Name: '${candidateName}'`);
+
+    // 1. Locate student doc ID
+    if (cleanEmail) {
+      const q = query(
+        collection(db, USERS_COLLECTION),
+        where("email", "==", cleanEmail)
+      );
+      const snapshot = await getDocs(q);
+      if (!snapshot.empty) {
+        studentDocId = snapshot.docs[0].id;
+        console.log(`🔍 [DB READ: getCandidateResults] Found student doc ID by email: '${studentDocId}'`);
+      }
+    }
+
+    if (!studentDocId && candidateName) {
+      const q = query(
+        collection(db, USERS_COLLECTION),
+        where("name", "==", candidateName.trim())
+      );
+      const snapshot = await getDocs(q);
+      if (!snapshot.empty) {
+        studentDocId = snapshot.docs[0].id;
+        console.log(`🔍 [DB READ: getCandidateResults] Found student doc ID by name: '${studentDocId}'`);
+      }
+    }
+
+    const resultsList: ResultDocument[] = [];
+
+    if (studentDocId) {
+      // Query specific student's nested subcollection
+      console.log(`🔍 [DB READ: getCandidateResults] Querying nested '${RESULTS_SUBCOLLECTION}' for student ID: '${studentDocId}'`);
+      const subcollSnapshot = await getDocs(
+        collection(db, USERS_COLLECTION, studentDocId, RESULTS_SUBCOLLECTION)
+      );
+      subcollSnapshot.docs.forEach((d) => {
+        resultsList.push(({
+          id: d.id,
+          studentDocId,
+          ...d.data(),
+        } as unknown) as ResultDocument);
+      });
+    } else {
+      // Query top-level fallback collection
+      console.log(`🔍 [DB READ: getCandidateResults] No student ID found. Scanning top-level '${RESULTS_SUBCOLLECTION}' for candidate email/name...`);
+      let q = query(
+        collection(db, RESULTS_SUBCOLLECTION),
+        where("candidateName", "==", candidateName.trim())
+      );
+      let snapshot = await getDocs(q);
+      
+      if (snapshot.empty && cleanEmail) {
+        q = query(
+          collection(db, RESULTS_SUBCOLLECTION),
+          where("candidateEmail", "==", cleanEmail)
+        );
+        snapshot = await getDocs(q);
+      }
+
+      snapshot.docs.forEach((d) => {
+        resultsList.push({
+          id: d.id,
+          ...d.data(),
+        } as ResultDocument);
+      });
+    }
+
+    console.log(`🔍 [DB READ: getCandidateResults] Completed. Retrieved ${resultsList.length} total results for this candidate.\n`);
+    
+    // Sort descending by submittedAt / createdAt
+    resultsList.sort((a, b) => {
+      const timeA = new Date(a.submittedAt || 0).getTime();
+      const timeB = new Date(b.submittedAt || 0).getTime();
+      return timeB - timeA;
+    });
+
+    return resultsList;
+  } catch (error) {
+    console.error("Error fetching candidate exam results:", error);
     return [];
   }
 }

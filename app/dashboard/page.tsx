@@ -7,7 +7,7 @@ import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
 import Spinner from "@/components/ui/Spinner";
 import { getExamPapers, syncExamPapersWithDB } from "@/lib/examRegistry";
-import { getAllExamResults } from "@/lib/firebase";
+import { getCandidateExamResults } from "@/lib/firebase";
 import { ExamPaper, ResultDocument } from "@/lib/types";
 import { downloadExamScorecardPDF } from "@/lib/generatePdfReport";
 
@@ -44,12 +44,7 @@ export default function StudentDashboard() {
   const fetchMyResults = async (name: string, email: string) => {
     setLoadingResults(true);
     try {
-      const allResults = await getAllExamResults();
-      const myResults = allResults.filter(
-        (r) =>
-          (email && r.candidateEmail && r.candidateEmail.toLowerCase() === email.toLowerCase()) ||
-          r.candidateName.toLowerCase().trim() === name.toLowerCase().trim()
-      );
+      const myResults = await getCandidateExamResults(name, email);
       setPastResults(myResults);
     } catch (err) {
       console.error("Error fetching my results:", err);

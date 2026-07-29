@@ -43,6 +43,11 @@ export default function AdminPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deletingExamPaper, setDeletingExamPaper] = useState<ExamPaper | null>(null);
 
+  // Multiple Selection for Candidate Results
+  const [selectedResults, setSelectedResults] = useState<string[]>([]);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+
   // Multi-Exam Management State
   const [examPapers, setExamPapers] = useState<ExamPaper[]>([]);
   const [activeManagingExam, setActiveManagingExam] = useState<ExamPaper | null>(null);
@@ -270,6 +275,59 @@ export default function AdminPage() {
       console.error(err);
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleSelectRow = (id: string) => {
+    setSelectedResults((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAll = () => {
+    const allIds = filteredResults.map((r) => r.id || "").filter(Boolean);
+    if (selectedResults.length === allIds.length) {
+      setSelectedResults([]);
+    } else {
+      setSelectedResults(allIds);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    setIsBulkDeleting(true);
+    try {
+      console.log(`🧹 [BULK DELETE] Starting deletion of ${selectedResults.length} selected exam results...`);
+      
+      // Perform all deletions in parallel
+      await Promise.all(
+        selectedResults.map(async (resId) => {
+          const resDoc = results.find((r) => r.id === resId);
+          if (resId && resDoc) {
+            await deleteExamResult(
+              resId,
+              resDoc.studentDocId,
+              resDoc.candidateEmail,
+              resDoc.candidateName,
+              false // do not delete student account
+            );
+          }
+        })
+      );
+
+      console.log(`🧹 [BULK DELETE] Successfully deleted ${selectedResults.length} exam results.`);
+      
+      // Update local state
+      setResults((prev) => prev.filter((r) => !selectedResults.includes(r.id || "")));
+      if (selectedResult && selectedResults.includes(selectedResult.id || "")) {
+        setSelectedResult(null);
+      }
+      setSelectedResults([]);
+      setShowBulkDeleteModal(false);
+    } catch (err) {
+      alert("Failed to delete some candidate records from database. Please check connection.");
+      console.error("Error in bulk delete:", err);
+    } finally {
+      setIsBulkDeleting(false);
     }
   };
 
@@ -567,6 +625,18 @@ export default function AdminPage() {
               </div>
             </Card>
 
+            {/* Bulk Action Bar */}
+            {selectedResults.length > 0 && (
+              <div className="flex items-center justify-between p-4 bg-danger/10 border border-danger/25 rounded-xl animate-scale-in">
+                <span className="text-sm font-semibold text-red-300">
+                  ⚡ {selectedResults.length} candidate record(s) selected
+                </span>
+                <Button variant="danger" size="sm" onClick={() => setShowBulkDeleteModal(true)}>
+                  Delete Selected
+                </Button>
+              </div>
+            )}
+
             {loading ? (
               <Card className="text-center py-16 text-foreground/45 flex flex-col items-center justify-center gap-3">
                 <Spinner className="w-8 h-8 text-gold-500" />
@@ -580,6 +650,14 @@ export default function AdminPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-navy-600/30">
+                        <th className="px-4 py-4 text-center w-12">
+                          <input
+                            type="checkbox"
+                            checked={filteredResults.length > 0 && selectedResults.length === filteredResults.length}
+                            onChange={handleSelectAll}
+                            className="rounded border-navy-600 text-gold-500 focus:ring-gold-500 bg-navy-800 cursor-pointer"
+                          />
+                        </th>
                         <th className="text-left px-6 py-4 text-xs font-semibold text-foreground/40 uppercase">#</th>
                         <th className="text-left px-6 py-4 text-xs font-semibold text-foreground/40 uppercase">Student</th>
                         <th className="text-left px-6 py-4 text-xs font-semibold text-foreground/40 uppercase">Exam Title</th>
@@ -614,6 +692,14 @@ export default function AdminPage() {
 
                         return (
                           <tr key={result.id || index} className="border-b border-navy-700/20 hover:bg-navy-800/50 transition-colors">
+                            <td className="px-4 py-4 text-center">
+                              <input
+                                type="checkbox"
+                                checked={selectedResults.includes(result.id || "")}
+                                onChange={() => handleSelectRow(result.id || "")}
+                                className="rounded border-navy-600 text-gold-500 focus:ring-gold-500 bg-navy-800 cursor-pointer"
+                              />
+                            </td>
                             <td className="px-6 py-4 text-foreground/40">{index + 1}</td>
                             <td className="px-6 py-4 font-medium text-white">{result.candidateName}</td>
                             <td className="px-6 py-4 text-xs text-gold-400 font-semibold">{result.examTitle || "CULET-2026 Mock Test 2"}</td>
@@ -1258,6 +1344,39 @@ export default function AdminPage() {
                     </>
                   ) : (
                     "Confirm Delete"
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Bulk Delete Candidate Confirmation Modal */}
+        {showBulkDeleteModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="modal-overlay absolute inset-0" onClick={() => setShowBulkDeleteModal(false)} />
+            <div className="relative glass-card p-6 max-w-md w-full animate-scale-in text-center space-y-4 border-danger/30">
+              <div className="w-12 h-12 rounded-full bg-danger/15 text-danger flex items-center justify-center mx-auto">
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-bold text-white">Delete Selected Attempts?</h3>
+              <p className="text-xs text-foreground/70 leading-relaxed">
+                Are you sure you want to permanently delete the <span className="font-bold text-white">{selectedResults.length}</span> selected candidate examination attempt and score records? This action cannot be undone.
+              </p>
+              <div className="flex gap-3 pt-2">
+                <Button variant="secondary" className="flex-1" onClick={() => setShowBulkDeleteModal(false)}>
+                  Cancel
+                </Button>
+                 <Button variant="danger" className="flex-1 flex items-center justify-center gap-2" disabled={isBulkDeleting} onClick={handleBulkDelete}>
+                  {isBulkDeleting ? (
+                    <>
+                      <Spinner className="w-4 h-4 text-white" />
+                      <span>Deleting...</span>
+                    </>
+                  ) : (
+                    "Confirm Bulk Delete"
                   )}
                 </Button>
               </div>

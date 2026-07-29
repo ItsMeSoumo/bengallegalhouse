@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getApps, initializeApp } from "firebase/app";
 import { getFirestore, doc, getDoc, getDocs, collection } from "firebase/firestore";
 import { ExamResult, ExamPaper } from "@/lib/types";
-import { saveExamResult, getAllExamResults } from "@/lib/firebase";
+import { saveExamResult, getCandidateExamResults } from "@/lib/firebase";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -37,8 +37,17 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { candidateName, candidateEmail, answers, timeTaken, examId } = body;
+    const cleanEmail = candidateEmail?.trim().toLowerCase() || "N/A";
+
+    console.log(`\n📝 [API POST: /api/exam/submit] Test submission received!
+        - Candidate Name: ${candidateName}
+        - Candidate Email: ${cleanEmail}
+        - Exam ID: ${examId}
+        - Time Taken: ${timeTaken} seconds
+        - Total Answers Submitted: ${answers.length}`);
 
     if (!candidateName || !Array.isArray(answers)) {
+      console.warn("⚠️ [API POST: /api/exam/submit] Invalid submission payload data!");
       return NextResponse.json(
         { success: false, error: "Invalid submission data" },
         { status: 400 }
@@ -46,27 +55,31 @@ export async function POST(request: Request) {
     }
 
     // Fetch exam paper from Firestore DB
+    console.log(`🔍 [DB READ: submit] Loading master exam sheet for ID: '${examId}'`);
     const examPaper = examId ? await getExamPaperFromDB(examId) : null;
 
     if (!examPaper || !examPaper.questions || examPaper.questions.length === 0) {
+      console.warn(`⚠️ [API POST: /api/exam/submit] Exam paper '${examId}' not found or has no questions configured!`);
       return NextResponse.json(
         { success: false, error: "Exam paper not found or has no questions" },
         { status: 404 }
       );
     }
 
+    console.log(`🔍 [DB READ: submit] Loaded exam '${examPaper.title}' with ${examPaper.questions.length} total questions.`);
+
     // ── Server-Side Attempt Limit Enforcement ──
     if (examPaper.maxAttempts && examPaper.maxAttempts > 0) {
       try {
-        const allResults = await getAllExamResults();
-        const existingAttempts = allResults.filter(
-          (r) =>
-            r.examId === examPaper.id &&
-            ((candidateEmail && r.candidateEmail && r.candidateEmail.toLowerCase().trim() === candidateEmail.toLowerCase().trim()) ||
-              r.candidateName?.toLowerCase().trim() === candidateName.toLowerCase().trim())
+        console.log(`🔍 [DB READ: submit check] Verifying attempt limits for candidate. Max allowed: ${examPaper.maxAttempts}`);
+        const candidateResults = await getCandidateExamResults(candidateName, candidateEmail);
+        const existingAttempts = candidateResults.filter(
+          (r) => r.examId === examPaper.id
         ).length;
 
+        console.log(`🔍 [DB READ: submit check] Student has already attempted this exam ${existingAttempts} times.`);
         if (existingAttempts >= examPaper.maxAttempts) {
+          console.warn(`⛔ [API POST: /api/exam/submit] Rejecting submission! Attempt limit (${examPaper.maxAttempts}) reached.`);
           return NextResponse.json(
             { success: false, error: `Maximum allowed attempts (${examPaper.maxAttempts}) reached for this examination.` },
             { status: 403 }
@@ -101,6 +114,14 @@ export async function POST(request: Request) {
     const percentage = Math.round((totalMarks / maxMarks) * 100 * 100) / 100;
     const passed = percentage >= examPaper.passingPercentage;
 
+    console.log(`📐 [EVALUATION] Grading completed:
+        - Correct Answers: ${correctCount}
+        - Wrong Answers: ${wrongCount}
+        - Unanswered: ${unansweredCount}
+        - Total Marks: ${totalMarks} / ${maxMarks}
+        - Percentage: ${percentage}% (Passing: ${examPaper.passingPercentage}%)
+        - Status: ${passed ? "PASSED" : "FAILED"}`);
+
     const result: ExamResult = {
       examId: examPaper.id,
       examTitle: examPaper.title,
@@ -122,11 +143,13 @@ export async function POST(request: Request) {
     // Save to Firebase
     let submissionId = "";
     try {
+      console.log(`💾 [DB WRITE: submit] Saving graded scorecard to Firestore database...`);
       submissionId = await saveExamResult(result);
     } catch (firebaseErr) {
       console.error("Firebase save error in server API:", firebaseErr);
     }
 
+    console.log(`📝 [API POST: /api/exam/submit] Submission processed successfully. Result Doc ID: '${submissionId}'`);
     return NextResponse.json({
       success: true,
       submissionId,

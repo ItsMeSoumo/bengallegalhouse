@@ -11,7 +11,7 @@ import { useTimer } from "@/hooks/useTimer";
 import { useExam } from "@/hooks/useExam";
 import { PublicQuestion } from "@/lib/types";
 import { EXAM_CONFIG } from "@/lib/constants";
-import { getAllExamResults } from "@/lib/firebase";
+import { getCandidateExamResults } from "@/lib/firebase";
 
 export default function ExamPage() {
   const router = useRouter();
@@ -225,12 +225,9 @@ export default function ExamPage() {
 
         // 3. Check attempt limits
         if (data.maxAttempts && data.maxAttempts > 0) {
-          const results = await getAllExamResults();
+          const results = await getCandidateExamResults(name, email);
           const attempts = results.filter(
-            (r) =>
-              r.examId === activeExamId &&
-              ((email && r.candidateEmail && r.candidateEmail.toLowerCase() === email.toLowerCase()) ||
-                r.candidateName.toLowerCase().trim() === name.toLowerCase().trim())
+            (r) => r.examId === activeExamId
           ).length;
 
           if (attempts >= data.maxAttempts) {
