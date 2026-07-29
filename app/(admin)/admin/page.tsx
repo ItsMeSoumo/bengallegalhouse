@@ -663,8 +663,6 @@ export default function AdminPage() {
                         <th className="text-left px-6 py-4 text-xs font-semibold text-foreground/40 uppercase">Exam Title</th>
                         <th className="text-center px-6 py-4 text-xs font-semibold text-foreground/40 uppercase">Attempt</th>
                         <th className="text-center px-6 py-4 text-xs font-semibold text-foreground/40 uppercase">Score</th>
-                        <th className="text-center px-6 py-4 text-xs font-semibold text-foreground/40 uppercase">Correct</th>
-                        <th className="text-center px-6 py-4 text-xs font-semibold text-foreground/40 uppercase">Wrong</th>
                         <th className="text-center px-6 py-4 text-xs font-semibold text-foreground/40 uppercase">Time</th>
                         <th className="text-center px-6 py-4 text-xs font-semibold text-foreground/40 uppercase">Date</th>
                         <th className="text-center px-6 py-4 text-xs font-semibold text-foreground/40 uppercase">Actions</th>
@@ -701,46 +699,44 @@ export default function AdminPage() {
                               />
                             </td>
                             <td className="px-6 py-4 text-foreground/40">{index + 1}</td>
-                            <td className="px-6 py-4 font-medium text-white">{result.candidateName}</td>
-                            <td className="px-6 py-4 text-xs text-gold-400 font-semibold">{result.examTitle || "CULET-2026 Mock Test 2"}</td>
+                            <td className="px-6 py-4 font-medium text-white whitespace-nowrap">{result.candidateName}</td>
+                            <td className="px-6 py-4 text-xs text-gold-400 font-semibold whitespace-nowrap">{result.examTitle || "CULET-2026 Mock Test 2"}</td>
                             <td className="px-6 py-4 text-center">
                               <span className="px-2.5 py-1 rounded-md text-xs font-semibold bg-purple/15 text-purple-300 border border-purple/30 whitespace-nowrap">
                                 Attempt {attemptNumber} of {maxAtt === 0 ? "∞" : maxAtt}
                               </span>
                             </td>
-                            <td className="px-6 py-4 text-center font-bold text-gold-400">{result.totalMarks} / {result.maxMarks}</td>
-                          <td className="px-6 py-4 text-center text-success font-semibold">{result.correctCount}</td>
-                          <td className="px-6 py-4 text-center text-danger font-semibold">{result.wrongCount}</td>
-                          <td className="px-6 py-4 text-center text-foreground/50">{formatTime(result.timeTaken)}</td>
-                          <td className="px-6 py-4 text-center text-foreground/40 text-xs">
-                            {new Date(result.submittedAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}
-                          </td>
-                          <td className="px-6 py-4 text-center">
-                            <div className="flex items-center justify-center gap-2">
-                              <button
-                                onClick={() => downloadExamScorecardPDF(result)}
-                                title="Download Scorecard PDF"
-                                className="p-2 rounded-lg hover:bg-gold-500/20 transition cursor-pointer text-foreground/40 hover:text-gold-400"
-                              >
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                              </button>
-                              <button onClick={() => handleSelectResult(result)} title="Inspect Details" className="p-2 rounded-lg hover:bg-navy-700 transition cursor-pointer text-foreground/40 hover:text-gold-400">
-                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                </svg>
-                              </button>
-                              {result.id && (
-                                <button onClick={() => setDeletingCandidate(result)} title="Delete Record" className="p-2 rounded-lg hover:bg-danger/20 transition cursor-pointer text-foreground/40 hover:text-danger">
+                            <td className="px-6 py-4 text-center font-bold text-gold-400 whitespace-nowrap">{result.totalMarks} / {result.maxMarks}</td>
+                            <td className="px-6 py-4 text-center text-foreground/50">{formatTime(result.timeTaken)}</td>
+                            <td className="px-6 py-4 text-center text-foreground/40 text-xs">
+                              {new Date(result.submittedAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              <div className="flex items-center justify-center gap-2">
+                                <button
+                                  onClick={() => downloadExamScorecardPDF(result)}
+                                  title="Download Scorecard PDF"
+                                  className="p-2 rounded-lg hover:bg-gold-500/20 transition cursor-pointer text-foreground/40 hover:text-gold-400"
+                                >
                                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                   </svg>
                                 </button>
-                              )}
-                            </div>
-                          </td>
+                                <button onClick={() => handleSelectResult(result)} title="Inspect Details" className="p-2 rounded-lg hover:bg-navy-700 transition cursor-pointer text-foreground/40 hover:text-gold-400">
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                  </svg>
+                                </button>
+                                {result.id && (
+                                  <button onClick={() => setDeletingCandidate(result)} title="Delete Record" className="p-2 rounded-lg hover:bg-danger/20 transition cursor-pointer text-foreground/40 hover:text-danger">
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                  </button>
+                                )}
+                              </div>
+                            </td>
                           </tr>
                         );
                       })}
