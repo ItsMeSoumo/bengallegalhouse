@@ -11,6 +11,18 @@ import { getCandidateExamResults } from "@/lib/firebase";
 import { ExamPaper, ResultDocument } from "@/lib/types";
 import { downloadExamScorecardPDF } from "@/lib/generatePdfReport";
 
+function formatTime12h(time24Str?: string): string {
+  if (!time24Str || !time24Str.includes(":")) return time24Str || "";
+  const [hStr, mStr] = time24Str.split(":");
+  let h = parseInt(hStr, 10);
+  const m = parseInt(mStr, 10) || 0;
+  if (isNaN(h)) return time24Str;
+  const period = h >= 12 ? "PM" : "AM";
+  h = h % 12;
+  if (h === 0) h = 12;
+  return `${h}:${String(m).padStart(2, "0")} ${period}`;
+}
+
 export default function StudentDashboard() {
   const router = useRouter();
   const [studentName, setStudentName] = useState("");
@@ -137,13 +149,22 @@ export default function StudentDashboard() {
               <Card className="text-center py-16">
                 <Spinner size="lg" label="Retrieving database records and attempt allowances..." />
               </Card>
-            ) : (
-              <div className="space-y-6">
-                {examPapers.map((paper) => {
-                  const attemptsTaken = pastResults.filter((r) => r.examId === paper.id).length;
-                  const maxAllowed = paper.maxAttempts || 0; // 0 = unlimited
-                  const isLimitReached = maxAllowed > 0 && attemptsTaken >= maxAllowed;
-                  const scheduleStatus = getScheduleStatus(paper);
+            ) : (() => {
+              const visiblePapers = examPapers.filter((p) => !p.isPrivate);
+              if (visiblePapers.length === 0) {
+                return (
+                  <Card className="text-center py-12 text-foreground/45">
+                    No public examination papers available right now.
+                  </Card>
+                );
+              }
+              return (
+                <div className="space-y-6">
+                  {visiblePapers.map((paper) => {
+                    const attemptsTaken = pastResults.filter((r) => r.examId === paper.id).length;
+                    const maxAllowed = paper.maxAttempts || 0; // 0 = unlimited
+                    const isLimitReached = maxAllowed > 0 && attemptsTaken >= maxAllowed;
+                    const scheduleStatus = getScheduleStatus(paper);
 
                   return (
                     <Card key={paper.id} variant="highlight" className="p-6 space-y-6">
@@ -196,7 +217,7 @@ export default function StudentDashboard() {
                         ) : scheduleStatus === "upcoming" ? (
                           <div className="w-full md:w-auto px-5 py-3 rounded-xl text-xs md:text-sm font-bold bg-purple/10 text-purple-300 border border-purple/30 flex items-center justify-center gap-2 shadow-md cursor-not-allowed select-none">
                             <span className="text-base">🕐</span>
-                            <span>Opens at {paper.scheduledStartTime} IST</span>
+                            <span>Opens at {formatTime12h(paper.scheduledStartTime)} IST</span>
                           </div>
                         ) : scheduleStatus === "closed" ? (
                           <div className="w-full md:w-auto px-5 py-3 rounded-xl text-xs md:text-sm font-bold bg-danger/10 text-danger border border-danger/30 flex items-center justify-center gap-2 shadow-md cursor-not-allowed select-none">
@@ -262,7 +283,7 @@ export default function StudentDashboard() {
                               {scheduleStatus === "live" ? "LIVE NOW" : scheduleStatus === "upcoming" ? "Upcoming" : "Closed"}
                               {" — "}
                               {new Date(paper.scheduledDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
-                              {", "}{paper.scheduledStartTime} – {paper.scheduledEndTime} IST
+                              {", "}{formatTime12h(paper.scheduledStartTime)} – {formatTime12h(paper.scheduledEndTime)} IST
                             </span>
                           </div>
 
@@ -293,7 +314,8 @@ export default function StudentDashboard() {
                   );
                 })}
               </div>
-            )}
+            );
+          })()}
           </div>
         )}
 

@@ -28,6 +28,7 @@ export interface ExamPaper {
   passingPercentage: number;
   maxAttempts: number; // 0 = unlimited, 1, 2, 3, etc.
   status: "active" | "paused";
+  isPrivate?: boolean; // true = hidden from students, false/undefined = public/visible
   questions: ServerQuestion[];
   // ── Exam Scheduling (optional) ──
   scheduledDate?: string;      // ISO date string e.g. "2026-07-30"

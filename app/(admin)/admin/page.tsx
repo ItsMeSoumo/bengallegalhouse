@@ -44,6 +44,7 @@ export default function AdminPage() {
   const [deletingCandidate, setDeletingCandidate] = useState<ResultDocument | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deletingExamPaper, setDeletingExamPaper] = useState<ExamPaper | null>(null);
+  const [visibilityAlertPaper, setVisibilityAlertPaper] = useState<ExamPaper | null>(null);
 
   // Multiple Selection for Candidate Results
   const [selectedResults, setSelectedResults] = useState<string[]>([]);
@@ -839,8 +840,14 @@ export default function AdminPage() {
                             <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gold-500/20 text-gold-400 border border-gold-500/30">
                               {paper.subtitle}
                             </span>
-                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${paper.status === "active" ? "bg-success/20 text-success border border-success/30" : "bg-warning/20 text-warning border border-warning/30"}`}>
-                              {paper.status === "active" ? "🟢 LIVE" : "🟡 PAUSED"}
+                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                              paper.isPrivate
+                                ? "bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-sm shadow-purple-500/10"
+                                : paper.status === "active"
+                                ? "bg-success/20 text-success border border-success/30"
+                                : "bg-warning/20 text-warning border border-warning/30"
+                            }`}>
+                              {paper.isPrivate ? "🔒 PRIVATE" : paper.status === "active" ? "🟢 PUBLIC" : "🟡 PAUSED"}
                             </span>
                           </div>
                           <h3 className="text-xl font-bold text-white">{paper.title}</h3>
@@ -866,9 +873,17 @@ export default function AdminPage() {
                           </div>
                         </div>
 
-                        <div className="flex gap-2 pt-2">
-                          <Button className="flex-1" onClick={() => handleOpenManageExam(paper)}>
+                        <div className="flex flex-wrap sm:flex-nowrap gap-2 pt-2">
+                          <Button className="flex-1 min-w-[120px]" onClick={() => handleOpenManageExam(paper)}>
                             ⚙️ Control Exam
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            className={paper.isPrivate ? "text-success border-success/30 bg-success/10 hover:bg-success/20 font-bold" : "text-purple-300 border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 font-bold"}
+                            onClick={() => setVisibilityAlertPaper(paper)}
+                          >
+                            {paper.isPrivate ? "🌐 Make Public" : "🔒 Make Private"}
                           </Button>
                           <Button variant="secondary" size="sm" className="text-danger border-danger/20 hover:bg-danger/10" onClick={() => setDeletingExamPaper(paper)}>
                             Delete
@@ -1519,6 +1534,71 @@ export default function AdminPage() {
                   ) : (
                     "Confirm Bulk Delete"
                   )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Visibility Toggle Alert Modal */}
+        {visibilityAlertPaper && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/80 backdrop-blur-md animate-fade-in">
+            <div className="relative glass-card p-6 max-w-md w-full animate-scale-in space-y-5 border-purple-500/30">
+              <div className="flex items-center gap-3">
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl font-bold shrink-0 ${
+                  visibilityAlertPaper.isPrivate
+                    ? "bg-success/20 text-success border border-success/30"
+                    : "bg-purple-500/20 text-purple-300 border border-purple-500/30"
+                }`}>
+                  {visibilityAlertPaper.isPrivate ? "🌐" : "🔒"}
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-white">
+                    {visibilityAlertPaper.isPrivate ? "Make Examination Public?" : "Make Examination Private (Hide)?"}
+                  </h3>
+                  <p className="text-xs text-foreground/50 line-clamp-1">
+                    {visibilityAlertPaper.title}
+                  </p>
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-navy-950/80 border border-white/10 text-xs text-foreground/70 leading-relaxed space-y-1.5">
+                {visibilityAlertPaper.isPrivate ? (
+                  <p>
+                    <strong className="text-success">Public Mode:</strong> All registered students will be able to see and attempt this exam on their dashboard immediately.
+                  </p>
+                ) : (
+                  <p>
+                    <strong className="text-purple-300">Private Mode:</strong> This exam will be <strong className="text-white">hidden from student dashboards</strong>. Students cannot see or take this exam while it is private.
+                  </p>
+                )}
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <Button
+                  variant="secondary"
+                  className="flex-1"
+                  onClick={() => setVisibilityAlertPaper(null)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className={`flex-1 font-bold ${
+                    visibilityAlertPaper.isPrivate
+                      ? "!bg-success !text-navy-950 shadow-md shadow-success/20"
+                      : "!bg-purple-500 !text-white shadow-md shadow-purple-500/20"
+                  }`}
+                  onClick={() => {
+                    const updated = {
+                      ...visibilityAlertPaper,
+                      isPrivate: !visibilityAlertPaper.isPrivate,
+                    };
+                    updateExamPaper(updated);
+                    setExamPapers(getExamPapers());
+                    setVisibilityAlertPaper(null);
+                  }}
+                >
+                  {visibilityAlertPaper.isPrivate ? "Yes, Make Public" : "Yes, Make Private"}
                 </Button>
               </div>
             </div>
