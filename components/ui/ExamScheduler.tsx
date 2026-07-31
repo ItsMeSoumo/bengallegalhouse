@@ -345,12 +345,15 @@ export default function ExamScheduler({
   }, []);
 
   const enable = () => {
-    onDateChange(todayIST());
+    const t = todayIST();
+    console.log("🗓️ [EXAM_SCHEDULER] Setting schedule window enabled:", { date: t, startTime: "10:00", endTime: "12:00" });
+    onDateChange(t);
     onStartTimeChange("10:00");
     onEndTimeChange("12:00");
   };
 
   const disable = () => {
+    console.log("🗓️ [EXAM_SCHEDULER] Removing schedule window (Always Available 24/7)");
     onDateChange("");
     onStartTimeChange("");
     onEndTimeChange("");

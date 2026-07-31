@@ -8,6 +8,7 @@ import {
   doc,
   setDoc,
   deleteDoc,
+  deleteField,
   query,
   where,
   Timestamp,
@@ -436,7 +437,7 @@ export async function getAllExamResults(): Promise<ResultDocument[]> {
     try {
       const usersSnapshot = await getDocs(collection(db, USERS_COLLECTION));
       console.log(`\n🚨 [DATABASE READ TRACE] Total ${usersSnapshot.docs.length} users fetched from '${USERS_COLLECTION}' collection!`);
-      
+
       let subcollectionCount = 0;
       for (const userDoc of usersSnapshot.docs) {
         subcollectionCount++;
@@ -447,7 +448,7 @@ export async function getAllExamResults(): Promise<ResultDocument[]> {
             - Email: ${userData.email || "N/A"}
             - Created At: ${userData.createdAt && typeof userData.createdAt.toDate === 'function' ? userData.createdAt.toDate().toISOString() : "N/A"}
             (${subcollectionCount}/${usersSnapshot.docs.length})`);
-        
+
         try {
           const subcollSnapshot = await getDocs(
             collection(db, USERS_COLLECTION, userDoc.id, RESULTS_SUBCOLLECTION)
@@ -576,7 +577,7 @@ export async function getCandidateExamResults(
         where("candidateName", "==", candidateName.trim())
       );
       let snapshot = await getDocs(q);
-      
+
       if (snapshot.empty && cleanEmail) {
         q = query(
           collection(db, RESULTS_SUBCOLLECTION),
@@ -594,7 +595,7 @@ export async function getCandidateExamResults(
     }
 
     console.log(`🔍 [DB READ: getCandidateResults] Completed. Retrieved ${resultsList.length} total results for this candidate.\n`);
-    
+
     // Sort descending by submittedAt / createdAt
     resultsList.sort((a, b) => {
       const timeA = new Date(a.submittedAt || 0).getTime();
@@ -623,21 +624,68 @@ function cleanUndefinedFields<T extends Record<string, unknown>>(obj: T): Record
 
 export async function saveExamPaperInDB(paper: ExamPaper): Promise<boolean> {
   try {
-    const cleaned = cleanUndefinedFields(paper as unknown as Record<string, unknown>);
-    await setDoc(doc(db, EXAMS_COLLECTION, paper.id), cleaned, { merge: true });
+    console.log(`🔥 [FIRESTORE WRITE: saveExamPaperInDB] Persisting exam paper '${paper.id}' to collection '${EXAMS_COLLECTION}':`, {
+      id: paper.id,
+      title: paper.title,
+      scheduledDate: paper.scheduledDate ? `'${paper.scheduledDate}'` : "DELETING_FIELD (Always Available 24/7)",
+      scheduledStartTime: paper.scheduledStartTime ? `'${paper.scheduledStartTime}'` : "DELETING_FIELD",
+      scheduledEndTime: paper.scheduledEndTime ? `'${paper.scheduledEndTime}'` : "DELETING_FIELD",
+      totalTimeMinutes: paper.totalTimeMinutes,
+      status: paper.status,
+      questionCount: paper.questions?.length || 0,
+    });
+
+    // Notify Server API Route so logs print directly in VS Code / Terminal running 'npm run dev'
+    if (typeof window !== "undefined") {
+      fetch("/api/admin/save-exam-paper", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "save", paper }),
+      }).catch((err) => {
+        console.debug("⚠️ [SERVER LOG NOTICE] Failed to trigger terminal logging:", err);
+      });
+    }
+
+    const payload: Record<string, unknown> = {
+      ...cleanUndefinedFields(paper as unknown as Record<string, unknown>),
+      subtitle: paper.subtitle || "",
+      description: paper.description || "",
+      maxAttempts: paper.maxAttempts ?? 1,
+      isPrivate: paper.isPrivate ?? false,
+      questions: paper.questions || [],
+      scheduledDate: paper.scheduledDate ? paper.scheduledDate : deleteField(),
+      scheduledStartTime: paper.scheduledStartTime ? paper.scheduledStartTime : deleteField(),
+      scheduledEndTime: paper.scheduledEndTime ? paper.scheduledEndTime : deleteField(),
+    };
+
+    await setDoc(doc(db, EXAMS_COLLECTION, paper.id), payload, { merge: true });
+    console.log(`✅ [FIRESTORE SUCCESS] Exam paper '${paper.id}' successfully saved & merged into Firestore DB!`);
     return true;
   } catch (err) {
-    console.warn("Error saving exam paper in Firestore DB:", err);
+    console.error("❌ [FIRESTORE ERROR] Failed to save exam paper in Firestore DB:", err);
     return false;
   }
 }
 
 export async function deleteExamPaperInDB(paperId: string): Promise<boolean> {
   try {
+    console.log(`🔥 [FIRESTORE WRITE: deleteExamPaperInDB] Deleting exam paper '${paperId}' from collection '${EXAMS_COLLECTION}'`);
+
+    if (typeof window !== "undefined") {
+      fetch("/api/admin/save-exam-paper", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete", paperId }),
+      }).catch((err) => {
+        console.debug("⚠️ [SERVER LOG NOTICE] Failed to trigger terminal logging:", err);
+      });
+    }
+
     await deleteDoc(doc(db, EXAMS_COLLECTION, paperId));
+    console.log(`✅ [FIRESTORE SUCCESS] Exam paper '${paperId}' deleted from Firestore DB!`);
     return true;
   } catch (err) {
-    console.warn("Error deleting exam paper in Firestore DB:", err);
+    console.error("❌ [FIRESTORE ERROR] Failed to delete exam paper in Firestore DB:", err);
     return false;
   }
 }
@@ -661,13 +709,22 @@ export async function getExamPapersFromDB(initialFallback: ExamPaper[] = []): Pr
     if (!snap.empty) {
       const list: ExamPaper[] = [];
       snap.forEach((d) => list.push(d.data() as ExamPaper));
+      console.log(`📖 [FIRESTORE READ: getExamPapersFromDB] Loaded ${list.length} papers from Firestore DB:`, list.map(p => ({
+        id: p.id,
+        title: p.title,
+        scheduledDate: p.scheduledDate || "None (Always Open)",
+        scheduledStartTime: p.scheduledStartTime || "None",
+        scheduledEndTime: p.scheduledEndTime || "None",
+        questionsCount: p.questions?.length || 0,
+      })));
       return list;
     } else if (initialFallback.length > 0) {
+      console.log(`📖 [FIRESTORE SEED] Collection '${EXAMS_COLLECTION}' empty. Seeding initial fallback papers...`);
       await seedExamPapersToDB(initialFallback);
       return initialFallback;
     }
   } catch (err) {
-    console.warn("Error fetching exam papers from Firestore DB:", err);
+    console.error("❌ Error fetching exam papers from Firestore DB:", err);
   }
   return initialFallback;
 }

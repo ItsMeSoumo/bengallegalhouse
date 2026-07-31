@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { getAllExamResults, deleteExamResult, getAllStudentUsers, deleteStudentUserInDB, StudentUserRecord, saveExamPaperInDB } from "@/lib/firebase";
+import { getAllExamResults, deleteExamResult, getAllStudentUsers, deleteStudentUserInDB, StudentUserRecord, saveExamPaperInDB, deleteExamPaperInDB } from "@/lib/firebase";
 import { ResultDocument, ExamPaper, ServerQuestion } from "@/lib/types";
 import { formatTime, cn } from "@/lib/utils";
 import { downloadExamScorecardPDF } from "@/lib/generatePdfReport";
@@ -11,7 +11,6 @@ import Spinner from "@/components/ui/Spinner";
 import AdminSidebar from "@/components/layout/AdminSidebar";
 import ExamScheduler from "@/components/ui/ExamScheduler";
 import NumericInput from "@/components/ui/NumericInput";
-import QuestionImportModal from "@/components/ui/QuestionImportModal";
 import AiQuestionExtractorModal from "@/components/ui/AiQuestionExtractorModal";
 import { EXAM_INFO } from "@/lib/constants";
 import {
@@ -68,6 +67,7 @@ export default function AdminPage() {
   const [maxAttempts, setMaxAttempts] = useState(1);
   const [examStatus, setExamStatus] = useState<"active" | "paused">("active");
   const [settingsSaved, setSettingsSaved] = useState(false);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [actionSuccessNotice, setActionSuccessNotice] = useState("");
 
   // Exam Scheduling State
@@ -123,13 +123,28 @@ export default function AdminPage() {
   const [newOpt2, setNewOpt2] = useState("");
   const [newOpt3, setNewOpt3] = useState("");
   const [newQCorrect, setNewQCorrect] = useState(0);
-  const [newQSubject, setNewQSubject] = useState("Legal Reasoning");
+  const [newQSubject, setNewQSubject] = useState("");
 
-  // Question Search & Import State inside Exam
+  // Edit Question State
+  const [editingQuestion, setEditingQuestion] = useState<ServerQuestion | null>(null);
+  const [editQText, setEditQText] = useState("");
+  const [editOpt0, setEditOpt0] = useState("");
+  const [editOpt1, setEditOpt1] = useState("");
+  const [editOpt2, setEditOpt2] = useState("");
+  const [editOpt3, setEditOpt3] = useState("");
+  const [editCorrect, setEditCorrect] = useState(0);
+  const [editSubject, setEditSubject] = useState("");
+  const [editExplanation, setEditExplanation] = useState("");
+
+  // Question Search & AI Import State inside Exam
   const [questionSearch, setQuestionSearch] = useState("");
   const [selectedSubject, setSelectedSubject] = useState("All");
-  const [showImportModal, setShowImportModal] = useState(false);
   const [showAiModal, setShowAiModal] = useState(false);
+
+  // Bulk Question Deletion State
+  const [selectedQuestionIds, setSelectedQuestionIds] = useState<number[]>([]);
+  const [showBulkDeleteQuestionsModal, setShowBulkDeleteQuestionsModal] = useState(false);
+  const [isBulkDeletingQuestions, setIsBulkDeletingQuestions] = useState(false);
 
   const handleImportQuestions = async (importedQuestions: ServerQuestion[], mode: "append" | "overwrite") => {
     if (!activeManagingExam) return;
@@ -184,41 +199,51 @@ export default function AdminPage() {
     setScheduledDate(paper.scheduledDate || "");
     setScheduledStartTime(paper.scheduledStartTime || "");
     setScheduledEndTime(paper.scheduledEndTime || "");
+    setSelectedQuestionIds([]);
+  };
+
+  // Calculate active window duration in minutes if a start and end time are set
+  const windowDurationMinutes = useMemo(() => {
+    if (!scheduledStartTime || !scheduledEndTime) return null;
+    const [sh, sm] = scheduledStartTime.split(":").map(Number);
+    const [eh, em] = scheduledEndTime.split(":").map(Number);
+    if (isNaN(sh) || isNaN(sm) || isNaN(eh) || isNaN(em)) return null;
+    let sMins = sh * 60 + sm;
+    let eMins = eh * 60 + em;
+    if (eMins <= sMins) eMins += 1440;
+    const diff = eMins - sMins;
+    return diff > 0 ? diff : null;
+  }, [scheduledStartTime, scheduledEndTime]);
+
+  // Enforce rule: Nominal exam duration MUST NOT exceed the window duration if a restricted schedule window is active
+  useEffect(() => {
+    if (windowDurationMinutes !== null && examTimeMinutes > windowDurationMinutes) {
+      console.log(`⏱️ [WINDOW_LIMIT_ENFORCED] Capping exam duration from ${examTimeMinutes}m to max window duration ${windowDurationMinutes}m`);
+      setExamTimeMinutes(windowDurationMinutes);
+    }
+  }, [windowDurationMinutes, examTimeMinutes]);
+
+  const handleSetExamTimeMinutes = (mins: number) => {
+    const validMins = Math.max(1, mins);
+    if (windowDurationMinutes !== null && validMins > windowDurationMinutes) {
+      setExamTimeMinutes(windowDurationMinutes);
+    } else {
+      setExamTimeMinutes(validMins);
+    }
   };
 
   const handleStartTimeChange = (newStart: string) => {
     setScheduledStartTime(newStart);
-    if (newStart && scheduledEndTime) {
-      const [sh, sm] = newStart.split(":").map(Number);
-      const [eh, em] = scheduledEndTime.split(":").map(Number);
-      if (!isNaN(sh) && !isNaN(sm) && !isNaN(eh) && !isNaN(em)) {
-        let sMins = sh * 60 + sm;
-        let eMins = eh * 60 + em;
-        if (eMins <= sMins) eMins += 1440;
-        const diff = eMins - sMins;
-        if (diff > 0) setExamTimeMinutes(diff);
-      }
-    }
   };
 
   const handleEndTimeChange = (newEnd: string) => {
     setScheduledEndTime(newEnd);
-    if (scheduledStartTime && newEnd) {
-      const [sh, sm] = scheduledStartTime.split(":").map(Number);
-      const [eh, em] = newEnd.split(":").map(Number);
-      if (!isNaN(sh) && !isNaN(sm) && !isNaN(eh) && !isNaN(em)) {
-        let sMins = sh * 60 + sm;
-        let eMins = eh * 60 + em;
-        if (eMins <= sMins) eMins += 1440;
-        const diff = eMins - sMins;
-        if (diff > 0) setExamTimeMinutes(diff);
-      }
-    }
   };
 
   // Save Settings for currently open Exam
-  const handleSaveExamSettings = () => {
+  const handleSaveExamSettings = async () => {
     if (!activeManagingExam) return;
+    setIsSavingSettings(true);
 
     const updated: ExamPaper = {
       ...activeManagingExam,
@@ -236,17 +261,30 @@ export default function AdminPage() {
       scheduledEndTime: scheduledEndTime || undefined,
     };
 
+    console.log(`💾 [ADMIN] Saving exam settings & schedule window for '${updated.id}':`, {
+      title: updated.title,
+      scheduledDate: updated.scheduledDate || "(None - Always Open)",
+      scheduledStartTime: updated.scheduledStartTime || "(None)",
+      scheduledEndTime: updated.scheduledEndTime || "(None)",
+      totalTimeMinutes: updated.totalTimeMinutes,
+    });
+
     updateExamPaper(updated);
     setActiveManagingExam(updated);
     setExamPapers((prev) =>
       prev.map((p) => (p.id === updated.id ? updated : p))
     );
+
+    const savedInDB = await saveExamPaperInDB(updated);
+    console.log(`🔥 [ADMIN] saveExamPaperInDB result for '${updated.id}':`, savedInDB);
+
+    setIsSavingSettings(false);
     setSettingsSaved(true);
     setTimeout(() => setSettingsSaved(false), 3000);
   };
 
   // Create New Examination
-  const handleCreateExam = (e: React.FormEvent) => {
+  const handleCreateExam = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newExamTitle.trim()) return;
 
@@ -265,6 +303,7 @@ export default function AdminPage() {
       questions: [], // Starts completely clean with 0 questions
     };
 
+    console.log(`✨ [ADMIN] Creating new exam paper '${newPaper.id}' - '${newPaper.title}'`);
     addExamPaper(newPaper);
     setExamPapers((prev) => [...prev, newPaper]);
     setShowAddExamModal(false);
@@ -273,17 +312,23 @@ export default function AdminPage() {
     setNewExamDescription("");
     setNewExamTimeMinutes(60);
 
+    const savedInDB = await saveExamPaperInDB(newPaper);
+    console.log(`🔥 [ADMIN] saveExamPaperInDB result for new paper '${newPaper.id}':`, savedInDB);
+
     // Open workspace immediately for newly created exam
     handleOpenManageExam(newPaper);
   };
 
   // Delete an Exam
-  const handleDeleteExam = (paperId: string) => {
+  const handleDeleteExam = async (paperId: string) => {
+    console.log(`🗑️ [ADMIN] Deleting exam paper '${paperId}'`);
     deleteExamPaper(paperId);
     setExamPapers(getExamPapers());
     if (activeManagingExam?.id === paperId) {
       setActiveManagingExam(null);
     }
+    const deletedInDB = await deleteExamPaperInDB(paperId);
+    console.log(`🔥 [ADMIN] deleteExamPaperInDB result for '${paperId}':`, deletedInDB);
   };
 
   const resetNewQForm = () => {
@@ -292,6 +337,100 @@ export default function AdminPage() {
     setNewOpt1("");
     setNewOpt2("");
     setNewOpt3("");
+    setNewQSubject("");
+  };
+
+  const handleOpenEditQuestion = (q: ServerQuestion) => {
+    setEditingQuestion(q);
+    setEditQText(q.question);
+    setEditOpt0(q.options[0] || "");
+    setEditOpt1(q.options[1] || "");
+    setEditOpt2(q.options[2] || "");
+    setEditOpt3(q.options[3] || "");
+    setEditCorrect(q.correctAnswer);
+    setEditSubject(q.subject || "");
+    setEditExplanation(q.explanation || "");
+  };
+
+  const handleSaveQuestionEdit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!activeManagingExam || !editingQuestion) return;
+    if (!editQText.trim() || !editOpt0.trim() || !editOpt1.trim()) return;
+
+    const updatedQuestions = (activeManagingExam.questions || []).map((q) => {
+      if (q.id === editingQuestion.id) {
+        return {
+          ...q,
+          question: editQText.trim(),
+          options: [editOpt0.trim(), editOpt1.trim(), editOpt2.trim() || "N/A", editOpt3.trim() || "N/A"],
+          correctAnswer: editCorrect,
+          subject: editSubject.trim() || undefined,
+          explanation: editExplanation.trim() || undefined,
+        };
+      }
+      return q;
+    });
+
+    const updatedPaper: ExamPaper = {
+      ...activeManagingExam,
+      questions: updatedQuestions,
+    };
+
+    updateExamPaper(updatedPaper);
+    setActiveManagingExam(updatedPaper);
+    setExamPapers(getExamPapers());
+    await saveExamPaperInDB(updatedPaper);
+    setEditingQuestion(null);
+    setActionSuccessNotice(`Question #${editingQuestion.id} updated successfully.`);
+    setTimeout(() => setActionSuccessNotice(""), 3000);
+  };
+
+  const handleDeleteQuestion = async (qId: number) => {
+    if (!activeManagingExam) return;
+
+    const remaining = (activeManagingExam.questions || []).filter((q) => q.id !== qId);
+    const reindexed = remaining.map((q, idx) => ({ ...q, id: idx + 1 }));
+
+    const updatedPaper: ExamPaper = {
+      ...activeManagingExam,
+      questions: reindexed,
+    };
+
+    updateExamPaper(updatedPaper);
+    setActiveManagingExam(updatedPaper);
+    setExamPapers(getExamPapers());
+    setSelectedQuestionIds([]);
+    await saveExamPaperInDB(updatedPaper);
+    setActionSuccessNotice(`Question #${qId} deleted successfully.`);
+    setTimeout(() => setActionSuccessNotice(""), 3000);
+  };
+
+  const handleBulkDeleteQuestions = async () => {
+    if (!activeManagingExam || selectedQuestionIds.length === 0) return;
+    setIsBulkDeletingQuestions(true);
+
+    const remaining = (activeManagingExam.questions || []).filter(
+      (q) => !selectedQuestionIds.includes(q.id)
+    );
+    const reindexed = remaining.map((q, idx) => ({ ...q, id: idx + 1 }));
+
+    const updatedPaper: ExamPaper = {
+      ...activeManagingExam,
+      questions: reindexed,
+    };
+
+    updateExamPaper(updatedPaper);
+    setActiveManagingExam(updatedPaper);
+    setExamPapers(getExamPapers());
+    await saveExamPaperInDB(updatedPaper);
+
+    const deletedCount = selectedQuestionIds.length;
+    setSelectedQuestionIds([]);
+    setShowBulkDeleteQuestionsModal(false);
+    setIsBulkDeletingQuestions(false);
+
+    setActionSuccessNotice(`Successfully deleted ${deletedCount} selected question(s).`);
+    setTimeout(() => setActionSuccessNotice(""), 3000);
   };
 
   // Add Question to Currently Active Exam
@@ -304,7 +443,7 @@ export default function AdminPage() {
       question: newQText.trim(),
       options: [newOpt0.trim(), newOpt1.trim(), newOpt2.trim() || "N/A", newOpt3.trim() || "N/A"],
       correctAnswer: newQCorrect,
-      subject: newQSubject,
+      subject: newQSubject.trim() || undefined,
     };
 
     addQuestionToExam(activeManagingExam.id, newQ);
@@ -919,13 +1058,12 @@ export default function AdminPage() {
                             <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gold-500/20 text-gold-400 border border-gold-500/30">
                               {paper.subtitle}
                             </span>
-                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                              paper.isPrivate
+                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${paper.isPrivate
                                 ? "bg-purple-500/20 text-purple-300 border border-purple-500/40 shadow-sm shadow-purple-500/10"
                                 : paper.status === "active"
-                                ? "bg-success/20 text-success border border-success/30"
-                                : "bg-warning/20 text-warning border border-warning/30"
-                            }`}>
+                                  ? "bg-success/20 text-success border border-success/30"
+                                  : "bg-warning/20 text-warning border border-warning/30"
+                              }`}>
                               {paper.isPrivate ? "🔒 PRIVATE" : paper.status === "active" ? "🟢 PUBLIC" : "🟡 PAUSED"}
                             </span>
                           </div>
@@ -1069,9 +1207,16 @@ export default function AdminPage() {
                           <label className="text-xs font-bold text-foreground/60 uppercase tracking-wider flex items-center gap-1.5">
                             <span>⏱️</span> Exam Duration
                           </label>
-                          <span className="text-xs font-extrabold text-gold-400 bg-gold-500/10 px-3 py-1 rounded-lg border border-gold-500/20">
-                            {examTimeMinutes} Minutes Total
-                          </span>
+                          <div className="flex items-center gap-2">
+                            {windowDurationMinutes !== null && (
+                              <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2.5 py-0.5 rounded-full border border-amber-500/30 flex items-center gap-1">
+                                <span>🔒</span> Max Window Limit: {windowDurationMinutes}m
+                              </span>
+                            )}
+                            <span className="text-xs font-extrabold text-gold-400 bg-gold-500/10 px-3 py-1 rounded-lg border border-gold-500/20">
+                              {examTimeMinutes} Minutes Total
+                            </span>
+                          </div>
                         </div>
 
                         <div className="flex flex-col sm:flex-row sm:items-center gap-3">
@@ -1079,16 +1224,20 @@ export default function AdminPage() {
                           <div className="flex items-center gap-1.5 flex-wrap">
                             {[25, 40, 60, 90, 120].map((mins) => {
                               const isSelected = examTimeMinutes === mins;
+                              const isExceedingWindow = windowDurationMinutes !== null && mins > windowDurationMinutes;
                               return (
                                 <button
                                   key={mins}
                                   type="button"
-                                  onClick={() => setExamTimeMinutes(mins)}
-                                  className={`px-3.5 py-2 rounded-xl text-xs font-bold border transition cursor-pointer ${
-                                    isSelected
-                                      ? "bg-gold-500 text-navy-950 border-gold-400 shadow-md shadow-gold-500/20"
-                                      : "bg-navy-900/80 border-white/10 text-foreground/50 hover:text-white hover:border-white/20"
-                                  }`}
+                                  disabled={isExceedingWindow}
+                                  onClick={() => handleSetExamTimeMinutes(mins)}
+                                  title={isExceedingWindow ? `Cannot exceed Schedule Window (${windowDurationMinutes} mins)` : undefined}
+                                  className={`px-3.5 py-2 rounded-xl text-xs font-bold border transition ${isExceedingWindow
+                                      ? "bg-navy-950/40 border-white/5 text-foreground/20 cursor-not-allowed opacity-40 line-through"
+                                      : isSelected
+                                        ? "bg-gold-500 text-navy-950 border-gold-400 shadow-md shadow-gold-500/20 cursor-pointer"
+                                        : "bg-navy-900/80 border-white/10 text-foreground/50 hover:text-white hover:border-white/20 cursor-pointer"
+                                    }`}
                                 >
                                   {mins}m
                                 </button>
@@ -1103,17 +1252,19 @@ export default function AdminPage() {
                             const isCustom = ![25, 40, 60, 90, 120].includes(examTimeMinutes);
                             return (
                               <div
-                                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl border transition-all ${
-                                  isCustom
+                                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl border transition-all ${isCustom
                                     ? "bg-purple-500/15 border-purple-500/40 text-purple-300 ring-1 ring-purple-500/20"
                                     : "bg-navy-950/80 border-white/10 text-foreground/60"
-                                }`}
+                                  }`}
                               >
                                 <span className="text-xs font-bold text-foreground/50">Custom:</span>
                                 <NumericInput
+                                  step={1}
+                                  min={1}
+                                  max={windowDurationMinutes ?? undefined}
                                   value={examTimeMinutes}
-                                  onChange={(v) => setExamTimeMinutes(v)}
-                                  className="w-20 px-3 py-2 rounded-xl bg-navy-900 border border-white/10 text-gold-400 font-bold text-sm text-center focus:outline-none focus:border-gold-500 transition shadow-inner"
+                                  onChange={(v) => handleSetExamTimeMinutes(v)}
+                                  className="w-16 px-2 py-1.5 rounded-xl bg-navy-900 border border-white/10 text-gold-400 font-bold text-sm text-center focus:outline-none focus:border-gold-500 transition shadow-inner"
                                 />
                                 <span className="text-xs font-semibold text-foreground/50">mins</span>
                                 {isCustom && (
@@ -1125,6 +1276,11 @@ export default function AdminPage() {
                             );
                           })()}
                         </div>
+                        {windowDurationMinutes !== null && examTimeMinutes >= windowDurationMinutes && (
+                          <p className="text-[11px] text-amber-300/80 font-medium">
+                            💡 Note: Exam duration is capped at <strong>{windowDurationMinutes} minutes</strong> to fit within the active Schedule Window ({scheduledStartTime} → {scheduledEndTime} IST).
+                          </p>
+                        )}
                       </div>
 
                       {/* Scoring tiles */}
@@ -1194,12 +1350,22 @@ export default function AdminPage() {
 
                       <Button
                         onClick={handleSaveExamSettings}
-                        className={`px-8 transition-all ${hasUnsavedChanges
-                          ? "!bg-gold-500 !text-navy-950 font-bold shadow-lg shadow-gold-500/25 ring-2 ring-gold-400"
-                          : ""
+                        disabled={isSavingSettings}
+                        className={`px-8 transition-all flex items-center justify-center gap-2 ${hasUnsavedChanges
+                            ? "!bg-gold-500 !text-navy-950 font-bold shadow-lg shadow-gold-500/25 ring-2 ring-gold-400"
+                            : ""
                           }`}
                       >
-                        {hasUnsavedChanges ? "Save Changes (Unsaved)" : "Save Changes"}
+                        {isSavingSettings ? (
+                          <>
+                            <Spinner size="sm" />
+                            <span>Saving Settings...</span>
+                          </>
+                        ) : hasUnsavedChanges ? (
+                          "Save Changes (Unsaved)"
+                        ) : (
+                          "Save Changes"
+                        )}
                       </Button>
                     </div>
 
@@ -1214,7 +1380,7 @@ export default function AdminPage() {
                         📝 Question Bank for &quot;{activeManagingExam.title}&quot; ({paperQuestions.length} Questions)
                       </h3>
                       <p className="text-xs text-foreground/40 mt-0.5">
-                        Manage individual questions or drag &amp; drop an Excel/CSV file to bulk upload.
+                        Manage individual questions or use AI Vision Extractor to upload booklet scans.
                       </p>
                     </div>
 
@@ -1227,15 +1393,6 @@ export default function AdminPage() {
                       >
                         <span>🤖</span>
                         <span>AI Vision Extractor</span>
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => setShowImportModal(true)}
-                        className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 border-gold-500/30 text-gold-400 font-bold"
-                      >
-                        <span>📥</span>
-                        <span>Bulk Import CSV / Excel</span>
                       </Button>
                       <Button
                         size="sm"
@@ -1269,54 +1426,149 @@ export default function AdminPage() {
                     </div>
                   </Card>
 
+                  {/* Bulk Question Action Toolbar */}
+                  {filteredQuestions.length > 0 && (
+                    <Card className="!p-3 bg-navy-900/60 border-white/10 flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <label className="flex items-center gap-2 text-xs font-bold text-white cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={
+                              filteredQuestions.length > 0 &&
+                              filteredQuestions.every((q) => selectedQuestionIds.includes(q.id))
+                            }
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                const allFilteredIds = filteredQuestions.map((q) => q.id);
+                                setSelectedQuestionIds(allFilteredIds);
+                              } else {
+                                setSelectedQuestionIds([]);
+                              }
+                            }}
+                            className="w-4 h-4 rounded border-navy-600 bg-navy-950 text-gold-500 focus:ring-gold-500/30 cursor-pointer accent-gold-500"
+                          />
+                          <span>Select All Questions ({filteredQuestions.length})</span>
+                        </label>
+
+                        {selectedQuestionIds.length > 0 && (
+                          <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-gold-500/20 text-gold-400 border border-gold-500/30">
+                            {selectedQuestionIds.length} Selected
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {selectedQuestionIds.length > 0 && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedQuestionIds([])}
+                              className="px-3 py-1.5 rounded-xl text-xs font-semibold text-foreground/50 hover:text-white hover:bg-navy-800 transition cursor-pointer border border-white/10"
+                            >
+                              Deselect All
+                            </button>
+                            <Button
+                              size="sm"
+                              variant="danger"
+                              onClick={() => setShowBulkDeleteQuestionsModal(true)}
+                              className="flex items-center gap-1.5 font-bold shadow-md shadow-danger/20"
+                            >
+                              <span>🗑️</span>
+                              <span>Delete Selected ({selectedQuestionIds.length})</span>
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </Card>
+                  )}
+
                   <div className="space-y-4">
                     {filteredQuestions.length === 0 ? (
                       <Card className="text-center py-12 text-foreground/45">
-                        No questions in this exam paper yet. Click <span className="text-gold-400 font-bold">Bulk Import CSV / Excel</span> to upload questions instantly!
+                        No questions in this exam paper yet. Click <span className="text-purple-300 font-bold">🤖 AI Vision Extractor</span> or <span className="text-gold-400 font-bold">➕ Add Question</span> to create questions!
                       </Card>
                     ) : (
-                      filteredQuestions.map((q) => (
-                        <Card key={q.id} className="p-4 space-y-3">
-                          <div className="flex items-center justify-between border-b border-navy-600/20 pb-2">
-                            <div className="flex items-center gap-2">
-                              <span className="px-2.5 py-0.5 rounded bg-navy-800 text-gold-400 font-bold text-xs border border-gold-500/20">
-                                Q{q.id}
-                              </span>
-                              <span className="text-xs text-foreground/40 font-medium">{q.subject}</span>
-                            </div>
-                            <span className="text-xs font-semibold text-success bg-success/10 px-2.5 py-0.5 rounded border border-success/20">
-                              Correct: Option {["A", "B", "C", "D"][q.correctAnswer]}
-                            </span>
-                          </div>
-
-                          <p className="text-sm font-medium text-white">{q.question}</p>
-
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            {q.options.map((opt, i) => (
-                              <div
-                                key={i}
-                                className={cn(
-                                  "p-2.5 rounded-lg border text-xs flex items-center gap-2",
-                                  i === q.correctAnswer
-                                    ? "border-success/40 bg-success/10 text-success font-semibold"
-                                    : "border-navy-700/50 bg-navy-900/40 text-foreground/60"
-                                )}
-                              >
-                                <span className="w-5 h-5 rounded flex items-center justify-center bg-navy-800 text-[10px] font-bold">
-                                  {["A", "B", "C", "D"][i]}
+                      filteredQuestions.map((q) => {
+                        const isSelected = selectedQuestionIds.includes(q.id);
+                        return (
+                          <Card
+                            key={q.id}
+                            className={`p-4 space-y-3 transition-all ${isSelected
+                                ? "border-gold-500/50 bg-gold-500/5 shadow-lg shadow-gold-500/5"
+                                : ""
+                              }`}
+                          >
+                            <div className="flex items-center justify-between border-b border-navy-600/20 pb-2">
+                              <div className="flex items-center gap-3">
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedQuestionIds((prev) => [...prev, q.id]);
+                                    } else {
+                                      setSelectedQuestionIds((prev) => prev.filter((id) => id !== q.id));
+                                    }
+                                  }}
+                                  className="w-4 h-4 rounded border-navy-600 bg-navy-950 text-gold-500 focus:ring-gold-500/30 cursor-pointer accent-gold-500"
+                                />
+                                <span className="px-2.5 py-0.5 rounded bg-navy-800 text-gold-400 font-bold text-xs border border-gold-500/20">
+                                  Q{q.id}
                                 </span>
-                                <span>{opt}</span>
+                                {q.subject && (
+                                  <span className="text-xs text-foreground/40 font-medium">{q.subject}</span>
+                                )}
                               </div>
-                            ))}
-                          </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-semibold text-success bg-success/10 px-2.5 py-0.5 rounded border border-success/20">
+                                  Correct: Option {["A", "B", "C", "D"][q.correctAnswer]}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditQuestion(q)}
+                                  className="px-2.5 py-1 rounded-lg bg-navy-800 hover:bg-navy-700 text-gold-400 font-bold text-xs border border-gold-500/20 transition cursor-pointer flex items-center gap-1"
+                                >
+                                  ✏️ Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteQuestion(q.id)}
+                                  className="px-2.5 py-1 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 font-bold text-xs border border-red-500/30 transition cursor-pointer flex items-center gap-1"
+                                >
+                                  🗑️ Delete
+                                </button>
+                              </div>
+                            </div>
 
-                          {q.explanation && (
-                            <p className="text-xs text-foreground/40 italic pt-1 border-t border-white/5">
-                              💡 <span className="font-semibold">Explanation:</span> {q.explanation}
-                            </p>
-                          )}
-                        </Card>
-                      ))
+                            <p className="text-sm font-medium text-white">{q.question}</p>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                              {q.options.map((opt, i) => (
+                                <div
+                                  key={i}
+                                  className={cn(
+                                    "p-2.5 rounded-lg border text-xs flex items-center gap-2",
+                                    i === q.correctAnswer
+                                      ? "border-success/40 bg-success/10 text-success font-semibold"
+                                      : "border-navy-700/50 bg-navy-900/40 text-foreground/60"
+                                  )}
+                                >
+                                  <span className="w-5 h-5 rounded flex items-center justify-center bg-navy-800 text-[10px] font-bold">
+                                    {["A", "B", "C", "D"][i]}
+                                  </span>
+                                  <span>{opt}</span>
+                                </div>
+                              ))}
+                            </div>
+
+                            {q.explanation && (
+                              <p className="text-xs text-foreground/40 italic pt-1 border-t border-white/5">
+                                💡 <span className="font-semibold">Explanation:</span> {q.explanation}
+                              </p>
+                            )}
+                          </Card>
+                        );
+                      })
                     )}
                   </div>
                 </div>
@@ -1537,13 +1789,12 @@ export default function AdminPage() {
 
               <form onSubmit={handleCreateQuestion} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold text-foreground/60 uppercase mb-1">Subject</label>
+                  <label className="block text-xs font-semibold text-foreground/60 uppercase mb-1">Subject (Optional)</label>
                   <input
                     type="text"
-                    required
                     value={newQSubject}
                     onChange={(e) => setNewQSubject(e.target.value)}
-                    placeholder="e.g. Legal Reasoning"
+                    placeholder="Optional, e.g. Legal Reasoning"
                     className="w-full px-4 py-2 rounded-xl bg-navy-900 border border-navy-800 text-white text-sm focus:outline-none focus:border-gold-500/50"
                   />
                 </div>
@@ -1587,6 +1838,87 @@ export default function AdminPage() {
                   </Button>
                   <Button type="submit" className="flex-1">
                     Save Question
+                  </Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Edit Question in Active Exam */}
+        {editingQuestion && activeManagingExam && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="modal-overlay absolute inset-0" onClick={() => setEditingQuestion(null)} />
+            <div className="relative glass-card p-6 md:p-8 max-w-xl w-full animate-scale-in space-y-6 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between border-b border-navy-600/30 pb-3">
+                <h3 className="text-lg font-bold text-white">Edit Question #{editingQuestion.id}</h3>
+                <button onClick={() => setEditingQuestion(null)} className="p-1 rounded hover:bg-navy-700 transition cursor-pointer">
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveQuestionEdit} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-foreground/60 uppercase mb-1">Subject (Optional)</label>
+                  <input
+                    type="text"
+                    value={editSubject}
+                    onChange={(e) => setEditSubject(e.target.value)}
+                    placeholder="Optional, e.g. Legal Reasoning"
+                    className="w-full px-4 py-2 rounded-xl bg-navy-900 border border-navy-800 text-white text-sm focus:outline-none focus:border-gold-500/50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-foreground/60 uppercase mb-1">Question Text</label>
+                  <textarea
+                    required
+                    value={editQText}
+                    onChange={(e) => setEditQText(e.target.value)}
+                    placeholder="Enter question statement..."
+                    rows={3}
+                    className="w-full px-4 py-2.5 rounded-xl bg-navy-900 border border-navy-800 text-white text-sm focus:outline-none focus:border-gold-500/50"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-xs font-semibold text-foreground/60 uppercase">Option Choices</label>
+                  <input type="text" required placeholder="Option A" value={editOpt0} onChange={(e) => setEditOpt0(e.target.value)} className="w-full px-4 py-2 rounded-xl bg-navy-900 border border-navy-800 text-white text-xs" />
+                  <input type="text" required placeholder="Option B" value={editOpt1} onChange={(e) => setEditOpt1(e.target.value)} className="w-full px-4 py-2 rounded-xl bg-navy-900 border border-navy-800 text-white text-xs" />
+                  <input type="text" placeholder="Option C" value={editOpt2} onChange={(e) => setEditOpt2(e.target.value)} className="w-full px-4 py-2 rounded-xl bg-navy-900 border border-navy-800 text-white text-xs" />
+                  <input type="text" placeholder="Option D" value={editOpt3} onChange={(e) => setEditOpt3(e.target.value)} className="w-full px-4 py-2 rounded-xl bg-navy-900 border border-navy-800 text-white text-xs" />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-foreground/60 uppercase mb-1">Select Correct Answer</label>
+                  <select
+                    value={editCorrect}
+                    onChange={(e) => setEditCorrect(Number(e.target.value))}
+                    className="w-full px-4 py-2.5 rounded-xl bg-navy-900 border border-gold-500/40 text-gold-400 font-bold text-sm focus:outline-none cursor-pointer"
+                  >
+                    <option value={0}>Option A</option>
+                    <option value={1}>Option B</option>
+                    <option value={2}>Option C</option>
+                    <option value={3}>Option D</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-foreground/60 uppercase mb-1">Explanation (Optional)</label>
+                  <input
+                    type="text"
+                    value={editExplanation}
+                    onChange={(e) => setEditExplanation(e.target.value)}
+                    placeholder="Brief explanation for candidates..."
+                    className="w-full px-4 py-2 rounded-xl bg-navy-900 border border-navy-800 text-white text-sm focus:outline-none focus:border-gold-500/50"
+                  />
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <Button type="button" variant="secondary" className="flex-1" onClick={() => setEditingQuestion(null)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" className="flex-1">
+                    Save Changes
                   </Button>
                 </div>
               </form>
@@ -1665,11 +1997,10 @@ export default function AdminPage() {
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-navy-950/80 backdrop-blur-md animate-fade-in">
             <div className="relative glass-card p-6 max-w-md w-full animate-scale-in space-y-5 border-purple-500/30">
               <div className="flex items-center gap-3">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl font-bold shrink-0 ${
-                  visibilityAlertPaper.isPrivate
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl font-bold shrink-0 ${visibilityAlertPaper.isPrivate
                     ? "bg-success/20 text-success border border-success/30"
                     : "bg-purple-500/20 text-purple-300 border border-purple-500/30"
-                }`}>
+                  }`}>
                   {visibilityAlertPaper.isPrivate ? "🌐" : "🔒"}
                 </div>
                 <div>
@@ -1703,19 +2034,20 @@ export default function AdminPage() {
                   Cancel
                 </Button>
                 <Button
-                  className={`flex-1 font-bold ${
-                    visibilityAlertPaper.isPrivate
+                  className={`flex-1 font-bold ${visibilityAlertPaper.isPrivate
                       ? "!bg-success !text-navy-950 shadow-md shadow-success/20"
                       : "!bg-purple-500 !text-white shadow-md shadow-purple-500/20"
-                  }`}
-                  onClick={() => {
+                    }`}
+                  onClick={async () => {
                     const updated = {
                       ...visibilityAlertPaper,
                       isPrivate: !visibilityAlertPaper.isPrivate,
                     };
+                    console.log(`🌐 [ADMIN] Toggling visibility for '${updated.id}' to isPrivate=${updated.isPrivate}`);
                     updateExamPaper(updated);
                     setExamPapers(getExamPapers());
                     setVisibilityAlertPaper(null);
+                    await saveExamPaperInDB(updated);
                   }}
                 >
                   {visibilityAlertPaper.isPrivate ? "Yes, Make Public" : "Yes, Make Private"}
@@ -1986,12 +2318,45 @@ export default function AdminPage() {
         )}
       </main>
 
-      {showImportModal && activeManagingExam && (
-        <QuestionImportModal
-          examTitle={activeManagingExam.title}
-          onClose={() => setShowImportModal(false)}
-          onImport={handleImportQuestions}
-        />
+      {/* Bulk Delete Questions Confirmation Modal */}
+      {showBulkDeleteQuestionsModal && activeManagingExam && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="modal-overlay absolute inset-0 bg-navy-950/85 backdrop-blur-md" onClick={() => setShowBulkDeleteQuestionsModal(false)} />
+          <div className="relative glass-card p-6 max-w-md w-full animate-scale-in text-center space-y-4 border-danger/30 shadow-2xl">
+            <div className="w-14 h-14 rounded-2xl bg-danger/15 text-danger border border-danger/30 flex items-center justify-center mx-auto text-2xl">
+              🗑️
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-white">Delete {selectedQuestionIds.length} Selected Question(s)?</h3>
+              <p className="text-xs text-foreground/70 leading-relaxed mt-1">
+                Are you sure you want to permanently remove <span className="font-bold text-danger">{selectedQuestionIds.length} question(s)</span> from <span className="font-bold text-white">&quot;{activeManagingExam.title}&quot;</span>?
+              </p>
+              <div className="mt-3 p-3 rounded-xl bg-navy-950 border border-white/10 text-[11px] text-foreground/50 max-h-24 overflow-y-auto font-mono text-left">
+                Questions to delete: {selectedQuestionIds.map(id => `Q${id}`).join(", ")}
+              </div>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <Button variant="secondary" className="flex-1" onClick={() => setShowBulkDeleteQuestionsModal(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                className="flex-1 flex items-center justify-center gap-2 font-bold"
+                disabled={isBulkDeletingQuestions}
+                onClick={handleBulkDeleteQuestions}
+              >
+                {isBulkDeletingQuestions ? (
+                  <>
+                    <Spinner size="sm" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  `Confirm Delete (${selectedQuestionIds.length})`
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
 
       {showAiModal && activeManagingExam && (

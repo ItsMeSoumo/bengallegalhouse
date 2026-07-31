@@ -162,7 +162,7 @@ Rules:
         question: String(item.question).trim(),
         options: opts,
         correctAnswer: cAns,
-        subject: item.subject ? String(item.subject).trim() : "General",
+        subject: item.subject ? String(item.subject).trim() : undefined,
         explanation: item.explanation ? String(item.explanation).trim() : undefined,
       });
     });

@@ -18,7 +18,7 @@ export interface PublicQuestion {
   id: number;
   question: string;
   options: string[];
-  subject: string;
+  subject?: string;
 }
 
 /** Full server-side question model including evaluation key and explanatory details */

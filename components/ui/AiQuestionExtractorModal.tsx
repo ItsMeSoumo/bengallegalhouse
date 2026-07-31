@@ -26,6 +26,17 @@ export default function AiQuestionExtractorModal({
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [previewImageSrc, setPreviewImageSrc] = useState<string>("");
 
+  // Edit Question State
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [editQText, setEditQText] = useState("");
+  const [editOpt0, setEditOpt0] = useState("");
+  const [editOpt1, setEditOpt1] = useState("");
+  const [editOpt2, setEditOpt2] = useState("");
+  const [editOpt3, setEditOpt3] = useState("");
+  const [editCorrect, setEditCorrect] = useState(0);
+  const [editSubject, setEditSubject] = useState("");
+  const [editExplanation, setEditExplanation] = useState("");
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const processImageFile = async (file: File) => {
@@ -40,7 +51,6 @@ export default function AiQuestionExtractorModal({
     setPreviewImageSrc("");
 
     try {
-      // Convert file to base64
       const reader = new FileReader();
       reader.onload = async (e) => {
         const base64Url = e.target?.result as string;
@@ -127,6 +137,40 @@ export default function AiQuestionExtractorModal({
     onClose();
   };
 
+  const handleStartEdit = (q: ServerQuestion, idx: number) => {
+    setEditingIdx(idx);
+    setEditQText(q.question);
+    setEditOpt0(q.options[0] || "");
+    setEditOpt1(q.options[1] || "");
+    setEditOpt2(q.options[2] || "");
+    setEditOpt3(q.options[3] || "");
+    setEditCorrect(q.correctAnswer);
+    setEditSubject(q.subject || "");
+    setEditExplanation(q.explanation || "");
+  };
+
+  const handleSaveEdit = (idx: number) => {
+    const updated = [...extractedQuestions];
+    updated[idx] = {
+      ...updated[idx],
+      question: editQText.trim(),
+      options: [editOpt0.trim(), editOpt1.trim(), editOpt2.trim() || "N/A", editOpt3.trim() || "N/A"],
+      correctAnswer: editCorrect,
+      subject: editSubject.trim() || undefined,
+      explanation: editExplanation.trim() || undefined,
+    };
+    setExtractedQuestions(updated);
+    setEditingIdx(null);
+  };
+
+  const handleDeleteRow = (idx: number) => {
+    setExtractedQuestions((prev) => prev.filter((_, i) => i !== idx));
+    setEditingIdx((current) => {
+      if (current === null || current === idx) return null;
+      return current > idx ? current - 1 : current;
+    });
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
@@ -166,11 +210,10 @@ export default function AiQuestionExtractorModal({
               setActiveTab("image");
               setErrorMessage("");
             }}
-            className={`px-4 py-2 text-xs font-bold border-b-2 transition cursor-pointer flex items-center gap-2 ${
-              activeTab === "image"
+            className={`px-4 py-2 text-xs font-bold border-b-2 transition cursor-pointer flex items-center gap-2 ${activeTab === "image"
                 ? "border-gold-400 text-gold-400"
                 : "border-transparent text-foreground/40 hover:text-white"
-            }`}
+              }`}
           >
             <span>🖼️ Image / Document Scan</span>
           </button>
@@ -181,11 +224,10 @@ export default function AiQuestionExtractorModal({
               setActiveTab("text");
               setErrorMessage("");
             }}
-            className={`px-4 py-2 text-xs font-bold border-b-2 transition cursor-pointer flex items-center gap-2 ${
-              activeTab === "text"
+            className={`px-4 py-2 text-xs font-bold border-b-2 transition cursor-pointer flex items-center gap-2 ${activeTab === "text"
                 ? "border-purple-400 text-purple-300"
                 : "border-transparent text-foreground/40 hover:text-white"
-            }`}
+              }`}
           >
             <span>📝 Paste Raw Text</span>
           </button>
@@ -216,11 +258,10 @@ export default function AiQuestionExtractorModal({
                 }}
                 onDragLeave={() => setIsDragging(false)}
                 onClick={() => fileInputRef.current?.click()}
-                className={`p-10 rounded-2xl border-2 border-dashed text-center transition cursor-pointer flex flex-col items-center justify-center gap-3 ${
-                  isDragging
+                className={`p-10 rounded-2xl border-2 border-dashed text-center transition cursor-pointer flex flex-col items-center justify-center gap-3 ${isDragging
                     ? "border-purple-400 bg-purple-500/10 scale-[1.01]"
                     : "border-white/15 bg-navy-950/60 hover:border-purple-500/40 hover:bg-navy-900/40"
-                }`}
+                  }`}
               >
                 {isExtracting ? (
                   <div className="py-6 space-y-3">
@@ -317,16 +358,6 @@ export default function AiQuestionExtractorModal({
                   <span className="px-3 py-1 rounded-full text-xs font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">
                     🤖 {extractedQuestions.length} Questions Extracted
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setExtractedQuestions([]);
-                      setPreviewImageSrc("");
-                    }}
-                    className="px-3 py-1 rounded-xl text-xs font-bold text-foreground/50 hover:text-white hover:bg-navy-800 transition cursor-pointer border border-white/10"
-                  >
-                    Upload Another Page
-                  </button>
                 </div>
               </div>
 
@@ -339,22 +370,20 @@ export default function AiQuestionExtractorModal({
                   <button
                     type="button"
                     onClick={() => setImportMode("append")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition cursor-pointer ${
-                      importMode === "append"
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition cursor-pointer ${importMode === "append"
                         ? "bg-gold-500 text-navy-950 border-gold-400 font-bold shadow-md shadow-gold-500/20"
                         : "bg-navy-950 text-foreground/50 border-white/10 hover:text-white"
-                    }`}
+                      }`}
                   >
                     ➕ Append to Question Bank
                   </button>
                   <button
                     type="button"
                     onClick={() => setImportMode("overwrite")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition cursor-pointer ${
-                      importMode === "overwrite"
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition cursor-pointer ${importMode === "overwrite"
                         ? "bg-danger text-white border-danger shadow-md shadow-danger/20"
                         : "bg-navy-950 text-foreground/50 border-white/10 hover:text-white"
-                    }`}
+                      }`}
                   >
                     🔄 Replace Question Bank
                   </button>
@@ -363,56 +392,187 @@ export default function AiQuestionExtractorModal({
 
               {/* Preview Table */}
               <div className="rounded-xl border border-navy-700/80 overflow-hidden">
-                <div className="max-h-72 overflow-y-auto">
+                <div className="max-h-80 overflow-y-auto">
                   <table className="w-full text-left text-xs">
                     <thead className="sticky top-0 bg-navy-900 border-b border-navy-700 text-foreground/45 uppercase text-[10px] tracking-wider z-10">
                       <tr>
-                        <th className="p-3 w-12 text-center">#</th>
+                        <th className="p-3 w-10 text-center">#</th>
                         <th className="p-3">Extracted Question</th>
-                        <th className="p-3">Options & Detected Answer</th>
+                        <th className="p-3">Options &amp; Key</th>
                         <th className="p-3 w-28">Subject</th>
+                        <th className="p-3 w-24 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-navy-800/40 bg-navy-950/40">
-                      {extractedQuestions.map((q, idx) => (
-                        <tr key={idx} className="hover:bg-navy-900/40">
-                          <td className="p-3 text-center font-mono text-foreground/40 font-bold">
-                            Q{idx + 1}
-                          </td>
-                          <td className="p-3 font-semibold text-white max-w-xs leading-relaxed">
-                            {q.question}
-                          </td>
-                          <td className="p-3 space-y-1">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              {q.options.map((opt, oIdx) => {
-                                const isCorrect = q.correctAnswer === oIdx;
-                                return (
-                                  <span
-                                    key={oIdx}
-                                    className={`px-2 py-0.5 rounded text-[11px] font-medium border ${
-                                      isCorrect
-                                        ? "bg-success/20 text-success border-success/40 font-bold"
-                                        : "bg-navy-900 text-foreground/50 border-white/5"
-                                    }`}
+                      {extractedQuestions.map((q, idx) => {
+                        const isEditingThis = editingIdx === idx;
+
+                        if (isEditingThis) {
+                          return (
+                            <tr key={idx} className="bg-purple-500/10">
+                              <td className="p-3 text-center font-mono text-gold-400 font-bold">
+                                Q{idx + 1}
+                              </td>
+                              <td colSpan={4} className="p-4 space-y-3">
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-semibold text-foreground/50 uppercase">Question Text</label>
+                                  <textarea
+                                    rows={2}
+                                    value={editQText}
+                                    onChange={(e) => setEditQText(e.target.value)}
+                                    className="w-full p-2.5 rounded-xl bg-navy-900 border border-purple-500/40 text-white text-xs focus:outline-none"
+                                  />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <label className="text-[10px] font-semibold text-foreground/40 uppercase">Option A</label>
+                                    <input
+                                      type="text"
+                                      value={editOpt0}
+                                      onChange={(e) => setEditOpt0(e.target.value)}
+                                      className="w-full p-2 rounded-lg bg-navy-900 border border-white/10 text-white text-xs"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] font-semibold text-foreground/40 uppercase">Option B</label>
+                                    <input
+                                      type="text"
+                                      value={editOpt1}
+                                      onChange={(e) => setEditOpt1(e.target.value)}
+                                      className="w-full p-2 rounded-lg bg-navy-900 border border-white/10 text-white text-xs"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] font-semibold text-foreground/40 uppercase">Option C</label>
+                                    <input
+                                      type="text"
+                                      value={editOpt2}
+                                      onChange={(e) => setEditOpt2(e.target.value)}
+                                      className="w-full p-2 rounded-lg bg-navy-900 border border-white/10 text-white text-xs"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] font-semibold text-foreground/40 uppercase">Option D</label>
+                                    <input
+                                      type="text"
+                                      value={editOpt3}
+                                      onChange={(e) => setEditOpt3(e.target.value)}
+                                      className="w-full p-2 rounded-lg bg-navy-900 border border-white/10 text-white text-xs"
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div>
+                                    <label className="text-[10px] font-semibold text-foreground/40 uppercase">Correct Answer Key</label>
+                                    <select
+                                      value={editCorrect}
+                                      onChange={(e) => setEditCorrect(Number(e.target.value))}
+                                      className="w-full p-2 rounded-lg bg-navy-900 border border-gold-500/40 text-gold-400 font-bold text-sm focus:outline-none cursor-pointer"
+                                    >
+                                      <option value={0}>Option A</option>
+                                      <option value={1}>Option B</option>
+                                      <option value={2}>Option C</option>
+                                      <option value={3}>Option D</option>
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] font-semibold text-foreground/40 uppercase">Subject (Optional)</label>
+                                    <input
+                                      type="text"
+                                      value={editSubject}
+                                      onChange={(e) => setEditSubject(e.target.value)}
+                                      placeholder="e.g. Legal Reasoning"
+                                      className="w-full p-2 rounded-lg bg-navy-900 border border-white/10 text-white text-xs"
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingIdx(null)}
+                                    className="px-3 py-1 rounded-lg text-xs font-bold text-foreground/40 hover:text-white"
                                   >
-                                    {["A", "B", "C", "D"][oIdx]}: {opt}
-                                  </span>
-                                );
-                              })}
-                            </div>
-                            {q.explanation && (
-                              <p className="text-[10px] text-foreground/40 italic">
-                                💡 {q.explanation}
-                              </p>
-                            )}
-                          </td>
-                          <td className="p-3 text-foreground/60">
-                            <span className="px-2 py-0.5 rounded bg-purple-500/15 text-purple-300 text-[10px] font-bold border border-purple-500/30">
-                              {q.subject}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
+                                    Cancel
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSaveEdit(idx)}
+                                    className="px-4 py-1 rounded-lg text-xs font-bold bg-success text-navy-950"
+                                  >
+                                    ✓ Save Edit
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        }
+
+                        return (
+                          <tr key={idx} className="hover:bg-navy-900/40">
+                            <td className="p-3 text-center font-mono text-foreground/40 font-bold">
+                              Q{idx + 1}
+                            </td>
+                            <td className="p-3 font-semibold text-white max-w-xs leading-relaxed">
+                              {q.question}
+                            </td>
+                            <td className="p-3 space-y-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {q.options.map((opt, oIdx) => {
+                                  const isCorrect = q.correctAnswer === oIdx;
+                                  return (
+                                    <span
+                                      key={oIdx}
+                                      className={`px-2 py-0.5 rounded text-[11px] font-medium border ${isCorrect
+                                          ? "bg-success/20 text-success border-success/40 font-bold"
+                                          : "bg-navy-900 text-foreground/50 border-white/5"
+                                        }`}
+                                    >
+                                      {["A", "B", "C", "D"][oIdx]}: {opt}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                              {q.explanation && (
+                                <p className="text-[10px] text-foreground/40 italic">
+                                  💡 {q.explanation}
+                                </p>
+                              )}
+                            </td>
+                            <td className="p-3 text-foreground/60">
+                              {q.subject ? (
+                                <span className="px-2 py-0.5 rounded bg-purple-500/15 text-purple-300 text-[10px] font-bold border border-purple-500/30">
+                                  {q.subject}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-foreground/30 italic">None</span>
+                              )}
+                            </td>
+                            <td className="p-3 text-right">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartEdit(q, idx)}
+                                  className="p-1 rounded-lg text-gold-400 hover:bg-gold-500/10 transition cursor-pointer text-xs"
+                                  title="Edit Question"
+                                >
+                                  ✏️
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteRow(idx)}
+                                  className="p-1 rounded-lg text-red-400 hover:bg-red-500/10 transition cursor-pointer text-xs"
+                                  title="Delete Question"
+                                >
+                                  🗑️
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
