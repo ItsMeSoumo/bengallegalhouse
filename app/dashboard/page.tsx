@@ -121,6 +121,15 @@ export default function StudentDashboard() {
     sessionStorage.setItem("activeExamId", selectedPaperToStart.id);
     sessionStorage.setItem("activeExamTitle", selectedPaperToStart.title);
     sessionStorage.setItem("activeExamTime", String(selectedPaperToStart.totalTimeMinutes * 60));
+    if (selectedPaperToStart.scheduledDate && selectedPaperToStart.scheduledEndTime) {
+      sessionStorage.setItem("activeScheduledDate", selectedPaperToStart.scheduledDate);
+      sessionStorage.setItem("activeScheduledStartTime", selectedPaperToStart.scheduledStartTime || "");
+      sessionStorage.setItem("activeScheduledEndTime", selectedPaperToStart.scheduledEndTime);
+    } else {
+      sessionStorage.removeItem("activeScheduledDate");
+      sessionStorage.removeItem("activeScheduledStartTime");
+      sessionStorage.removeItem("activeScheduledEndTime");
+    }
     router.push("/exam");
   };
 

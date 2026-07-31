@@ -12,7 +12,8 @@ interface UseTimerReturn {
 
 export function useTimer(
   totalSeconds: number,
-  onExpire: () => void
+  onExpire: () => void,
+  hardEndTimestamp?: number
 ): UseTimerReturn {
   const [timeLeft, setTimeLeft] = useState<number>(totalSeconds);
   const [isRunning, setIsRunning] = useState<boolean>(false);
@@ -75,9 +76,26 @@ export function useTimer(
     }
 
     const updateTimer = () => {
-      if (!endTimeRef.current) return;
       const now = Date.now();
-      const remainingSeconds = Math.max(0, Math.ceil((endTimeRef.current - now) / 1000));
+
+      // Enforce strict expiration at hardEndTimestamp
+      if (hardEndTimestamp && now >= hardEndTimestamp) {
+        clearTimer();
+        endTimeRef.current = null;
+        setIsRunning(false);
+        setTimeout(() => {
+          onExpireRef.current();
+        }, 0);
+        return;
+      }
+
+      if (!endTimeRef.current) return;
+      let remainingSeconds = Math.max(0, Math.ceil((endTimeRef.current - now) / 1000));
+
+      if (hardEndTimestamp) {
+        const secondsUntilHardEnd = Math.max(0, Math.ceil((hardEndTimestamp - now) / 1000));
+        remainingSeconds = Math.min(remainingSeconds, secondsUntilHardEnd);
+      }
 
       setTimeLeft(remainingSeconds);
 
@@ -97,7 +115,7 @@ export function useTimer(
     timerRef.current = setInterval(updateTimer, 500);
 
     return clearTimer;
-  }, [isRunning, clearTimer]);
+  }, [isRunning, clearTimer, hardEndTimestamp]);
 
   // Cleanup on unmount
   useEffect(() => {

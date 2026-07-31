@@ -83,6 +83,9 @@ export async function GET(request: Request) {
       negativeMarks: paperData.negativeMarks,
       passingPercentage: paperData.passingPercentage,
       maxAttempts: paperData.maxAttempts || 0,
+      scheduledDate: paperData.scheduledDate,
+      scheduledStartTime: paperData.scheduledStartTime,
+      scheduledEndTime: paperData.scheduledEndTime,
       questions: publicQuestions,
     });
   } catch (error) {

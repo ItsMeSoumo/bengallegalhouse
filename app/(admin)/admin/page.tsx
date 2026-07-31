@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { getAllExamResults, deleteExamResult, getAllStudentUsers, deleteStudentUserInDB, StudentUserRecord } from "@/lib/firebase";
+import { getAllExamResults, deleteExamResult, getAllStudentUsers, deleteStudentUserInDB, StudentUserRecord, saveExamPaperInDB } from "@/lib/firebase";
 import { ResultDocument, ExamPaper, ServerQuestion } from "@/lib/types";
 import { formatTime, cn } from "@/lib/utils";
 import { downloadExamScorecardPDF } from "@/lib/generatePdfReport";
@@ -11,6 +11,8 @@ import Spinner from "@/components/ui/Spinner";
 import AdminSidebar from "@/components/layout/AdminSidebar";
 import ExamScheduler from "@/components/ui/ExamScheduler";
 import NumericInput from "@/components/ui/NumericInput";
+import QuestionImportModal from "@/components/ui/QuestionImportModal";
+import AiQuestionExtractorModal from "@/components/ui/AiQuestionExtractorModal";
 import { EXAM_INFO } from "@/lib/constants";
 import {
   initialExamPapers,
@@ -123,9 +125,42 @@ export default function AdminPage() {
   const [newQCorrect, setNewQCorrect] = useState(0);
   const [newQSubject, setNewQSubject] = useState("Legal Reasoning");
 
-  // Question Search State inside Exam
+  // Question Search & Import State inside Exam
   const [questionSearch, setQuestionSearch] = useState("");
   const [selectedSubject, setSelectedSubject] = useState("All");
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [showAiModal, setShowAiModal] = useState(false);
+
+  const handleImportQuestions = async (importedQuestions: ServerQuestion[], mode: "append" | "overwrite") => {
+    if (!activeManagingExam) return;
+
+    let updatedQuestions: ServerQuestion[] = [];
+    if (mode === "overwrite") {
+      updatedQuestions = importedQuestions.map((q, idx) => ({ ...q, id: idx + 1 }));
+    } else {
+      const existing = activeManagingExam.questions || [];
+      const startId = existing.length + 1;
+      const reindexed = importedQuestions.map((q, idx) => ({ ...q, id: startId + idx }));
+      updatedQuestions = [...existing, ...reindexed];
+    }
+
+    const updatedPaper: ExamPaper = {
+      ...activeManagingExam,
+      questions: updatedQuestions,
+    };
+
+    updateExamPaper(updatedPaper);
+    setActiveManagingExam(updatedPaper);
+    setExamPapers(getExamPapers());
+
+    try {
+      await saveExamPaperInDB(updatedPaper);
+      setActionSuccessNotice(`Successfully imported ${importedQuestions.length} questions to ${activeManagingExam.title}!`);
+      setTimeout(() => setActionSuccessNotice(""), 4000);
+    } catch (err) {
+      console.error("Error saving imported questions to Firestore DB:", err);
+    }
+  };
 
   // Admin Authentication States
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -149,6 +184,36 @@ export default function AdminPage() {
     setScheduledDate(paper.scheduledDate || "");
     setScheduledStartTime(paper.scheduledStartTime || "");
     setScheduledEndTime(paper.scheduledEndTime || "");
+  };
+
+  const handleStartTimeChange = (newStart: string) => {
+    setScheduledStartTime(newStart);
+    if (newStart && scheduledEndTime) {
+      const [sh, sm] = newStart.split(":").map(Number);
+      const [eh, em] = scheduledEndTime.split(":").map(Number);
+      if (!isNaN(sh) && !isNaN(sm) && !isNaN(eh) && !isNaN(em)) {
+        let sMins = sh * 60 + sm;
+        let eMins = eh * 60 + em;
+        if (eMins <= sMins) eMins += 1440;
+        const diff = eMins - sMins;
+        if (diff > 0) setExamTimeMinutes(diff);
+      }
+    }
+  };
+
+  const handleEndTimeChange = (newEnd: string) => {
+    setScheduledEndTime(newEnd);
+    if (scheduledStartTime && newEnd) {
+      const [sh, sm] = scheduledStartTime.split(":").map(Number);
+      const [eh, em] = newEnd.split(":").map(Number);
+      if (!isNaN(sh) && !isNaN(sm) && !isNaN(eh) && !isNaN(em)) {
+        let sMins = sh * 60 + sm;
+        let eMins = eh * 60 + em;
+        if (eMins <= sMins) eMins += 1440;
+        const diff = eMins - sMins;
+        if (diff > 0) setExamTimeMinutes(diff);
+      }
+    }
   };
 
   // Save Settings for currently open Exam
@@ -197,7 +262,7 @@ export default function AdminPage() {
       passingPercentage: 40,
       maxAttempts: 1,
       status: "active",
-      questions: defaultQuestions.slice(0, 10), // Seed with default questions
+      questions: [], // Starts completely clean with 0 questions
     };
 
     addExamPaper(newPaper);
@@ -1109,8 +1174,8 @@ export default function AdminPage() {
                         startTime={scheduledStartTime}
                         endTime={scheduledEndTime}
                         onDateChange={setScheduledDate}
-                        onStartTimeChange={setScheduledStartTime}
-                        onEndTimeChange={setScheduledEndTime}
+                        onStartTimeChange={handleStartTimeChange}
+                        onEndTimeChange={handleEndTimeChange}
                       />
                     </div>
 
@@ -1141,16 +1206,46 @@ export default function AdminPage() {
                   </div>
                 </div>
 
-                {/* Question Bank inside THIS Exam (Hidden / Commented Out for Now) */}
-                {/* 
-                <div className="space-y-4">
+                {/* Question Bank inside THIS Exam */}
+                <div className="space-y-4 pt-4 border-t border-white/10">
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <h3 className="text-base font-bold text-white">
-                      📝 Question Bank for &quot;{activeManagingExam.title}&quot; ({filteredQuestions.length} Questions)
-                    </h3>
-                    <Button size="sm" onClick={() => setShowAddQuestionModal(true)}>
-                      ➕ Add Question to this Exam
-                    </Button>
+                    <div>
+                      <h3 className="text-base font-bold text-white">
+                        📝 Question Bank for &quot;{activeManagingExam.title}&quot; ({paperQuestions.length} Questions)
+                      </h3>
+                      <p className="text-xs text-foreground/40 mt-0.5">
+                        Manage individual questions or drag &amp; drop an Excel/CSV file to bulk upload.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => setShowAiModal(true)}
+                        className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 border-purple-500/30 text-purple-300 font-bold bg-purple-500/10 hover:bg-purple-500/20"
+                      >
+                        <span>🤖</span>
+                        <span>AI Vision Extractor</span>
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => setShowImportModal(true)}
+                        className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 border-gold-500/30 text-gold-400 font-bold"
+                      >
+                        <span>📥</span>
+                        <span>Bulk Import CSV / Excel</span>
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => setShowAddQuestionModal(true)}
+                        className="flex-1 sm:flex-none flex items-center justify-center gap-1.5 font-bold"
+                      >
+                        <span>➕</span>
+                        <span>Add Question</span>
+                      </Button>
+                    </div>
                   </div>
 
                   <Card className="!p-4">
@@ -1175,45 +1270,56 @@ export default function AdminPage() {
                   </Card>
 
                   <div className="space-y-4">
-                    {filteredQuestions.map((q) => (
-                      <Card key={q.id} className="p-4 space-y-3">
-                        <div className="flex items-center justify-between border-b border-navy-600/20 pb-2">
-                          <div className="flex items-center gap-2">
-                            <span className="px-2.5 py-0.5 rounded bg-navy-800 text-gold-400 font-bold text-xs border border-gold-500/20">
-                              Q{q.id}
-                            </span>
-                            <span className="text-xs text-foreground/40 font-medium">{q.subject}</span>
-                          </div>
-                          <span className="text-xs font-semibold text-success bg-success/10 px-2 py-0.5 rounded">
-                            Correct: Option {["A", "B", "C", "D"][q.correctAnswer]}
-                          </span>
-                        </div>
-
-                        <p className="text-sm font-medium text-white">{q.question}</p>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          {q.options.map((opt, i) => (
-                            <div
-                              key={i}
-                              className={cn(
-                                "p-2.5 rounded-lg border text-xs flex items-center gap-2",
-                                i === q.correctAnswer
-                                  ? "border-success/40 bg-success/10 text-success font-semibold"
-                                  : "border-navy-700/50 bg-navy-900/40 text-foreground/60"
-                              )}
-                            >
-                              <span className="w-5 h-5 rounded flex items-center justify-center bg-navy-800 text-[10px] font-bold">
-                                {["A", "B", "C", "D"][i]}
-                              </span>
-                              <span>{opt}</span>
-                            </div>
-                          ))}
-                        </div>
+                    {filteredQuestions.length === 0 ? (
+                      <Card className="text-center py-12 text-foreground/45">
+                        No questions in this exam paper yet. Click <span className="text-gold-400 font-bold">Bulk Import CSV / Excel</span> to upload questions instantly!
                       </Card>
-                    ))}
+                    ) : (
+                      filteredQuestions.map((q) => (
+                        <Card key={q.id} className="p-4 space-y-3">
+                          <div className="flex items-center justify-between border-b border-navy-600/20 pb-2">
+                            <div className="flex items-center gap-2">
+                              <span className="px-2.5 py-0.5 rounded bg-navy-800 text-gold-400 font-bold text-xs border border-gold-500/20">
+                                Q{q.id}
+                              </span>
+                              <span className="text-xs text-foreground/40 font-medium">{q.subject}</span>
+                            </div>
+                            <span className="text-xs font-semibold text-success bg-success/10 px-2.5 py-0.5 rounded border border-success/20">
+                              Correct: Option {["A", "B", "C", "D"][q.correctAnswer]}
+                            </span>
+                          </div>
+
+                          <p className="text-sm font-medium text-white">{q.question}</p>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {q.options.map((opt, i) => (
+                              <div
+                                key={i}
+                                className={cn(
+                                  "p-2.5 rounded-lg border text-xs flex items-center gap-2",
+                                  i === q.correctAnswer
+                                    ? "border-success/40 bg-success/10 text-success font-semibold"
+                                    : "border-navy-700/50 bg-navy-900/40 text-foreground/60"
+                                )}
+                              >
+                                <span className="w-5 h-5 rounded flex items-center justify-center bg-navy-800 text-[10px] font-bold">
+                                  {["A", "B", "C", "D"][i]}
+                                </span>
+                                <span>{opt}</span>
+                              </div>
+                            ))}
+                          </div>
+
+                          {q.explanation && (
+                            <p className="text-xs text-foreground/40 italic pt-1 border-t border-white/5">
+                              💡 <span className="font-semibold">Explanation:</span> {q.explanation}
+                            </p>
+                          )}
+                        </Card>
+                      ))
+                    )}
                   </div>
                 </div>
-                */}
               </div>
             )}
           </div>
@@ -1879,6 +1985,22 @@ export default function AdminPage() {
           </div>
         )}
       </main>
+
+      {showImportModal && activeManagingExam && (
+        <QuestionImportModal
+          examTitle={activeManagingExam.title}
+          onClose={() => setShowImportModal(false)}
+          onImport={handleImportQuestions}
+        />
+      )}
+
+      {showAiModal && activeManagingExam && (
+        <AiQuestionExtractorModal
+          examTitle={activeManagingExam.title}
+          onClose={() => setShowAiModal(false)}
+          onImport={handleImportQuestions}
+        />
+      )}
     </div>
   );
 }

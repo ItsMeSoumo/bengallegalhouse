@@ -26,6 +26,7 @@ export default function ExamPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPalette, setShowPalette] = useState(false);
   const [restoredSession, setRestoredSession] = useState<any>(null);
+  const [hardEndTimestamp, setHardEndTimestamp] = useState<number | undefined>(undefined);
 
   const exam = useExam(examQuestions);
   const currentQuestion = examQuestions[exam.state.currentQuestionIndex];
@@ -78,7 +79,7 @@ export default function ExamPage() {
     }
   }, [router, isSubmitting]);
 
-  const timer = useTimer(examTimeSec, handleSubmit);
+  const timer = useTimer(examTimeSec, handleSubmit, hardEndTimestamp);
 
   // ── Tab Switch / Anti-Cheating Monitors ─────────────────────────────────────
 
@@ -178,9 +179,36 @@ export default function ExamPage() {
         }
 
         const loadedQuestions: PublicQuestion[] = data.questions;
-        const allocatedDurationSec = (data.totalTimeMinutes && data.totalTimeMinutes > 0)
+
+        // Calculate Hard Scheduled End Time (if present)
+        let scheduledEndMs: number | undefined = undefined;
+        const schedDate = data.scheduledDate || sessionStorage.getItem("activeScheduledDate");
+        const schedEndTime = data.scheduledEndTime || sessionStorage.getItem("activeScheduledEndTime");
+
+        if (schedDate && schedEndTime) {
+          try {
+            const endIso = `${schedDate}T${schedEndTime}:00`;
+            const endObj = new Date(endIso);
+            if (!isNaN(endObj.getTime())) {
+              scheduledEndMs = endObj.getTime();
+              setHardEndTimestamp(scheduledEndMs);
+            }
+          } catch (e) {
+            console.error("Error parsing scheduled end timestamp:", e);
+          }
+        }
+
+        const nominalDurationSec = (data.totalTimeMinutes && data.totalTimeMinutes > 0)
           ? data.totalTimeMinutes * 60
           : EXAM_CONFIG.totalTime;
+
+        // Dual Cap Rule: Math.min(nominalDuration, secondsUntilScheduledEnd)
+        let secondsUntilScheduledEnd = Infinity;
+        if (scheduledEndMs) {
+          secondsUntilScheduledEnd = Math.max(0, Math.floor((scheduledEndMs - Date.now()) / 1000));
+        }
+
+        const allocatedDurationSec = Math.min(nominalDurationSec, secondsUntilScheduledEnd);
 
         // 2. Check for an active, existing exam session in storage (prevents timer/answer reset on reload)
         const sKey = `soham_cbt_session_${activeExamId}_${(email || name).toLowerCase().trim()}`;
@@ -198,10 +226,15 @@ export default function ExamPage() {
         if (parsedSession && parsedSession.startTime) {
           const elapsedSec = Math.floor((Date.now() - parsedSession.startTime) / 1000);
           const totalSec = parsedSession.totalTimeSeconds || allocatedDurationSec;
-          const remainingSec = totalSec - elapsedSec;
+          let remainingSec = totalSec - elapsedSec;
+
+          if (scheduledEndMs) {
+            const windowRemainingSec = Math.max(0, Math.floor((scheduledEndMs - Date.now()) / 1000));
+            remainingSec = Math.min(remainingSec, windowRemainingSec);
+          }
 
           if (remainingSec <= 0) {
-            // Exam timer ran out while offline/reloading -> trigger auto-submit
+            // Exam timer or scheduled window ran out -> trigger auto-submit
             setExamQuestions(loadedQuestions);
             setCandidateName(name);
             setIsInitializing(false);
@@ -213,6 +246,15 @@ export default function ExamPage() {
           setRestoredSession(parsedSession);
         } else {
           // Fresh exam start — initialize session
+          if (allocatedDurationSec <= 0) {
+            // Exam window expired before candidate started
+            setExamQuestions(loadedQuestions);
+            setCandidateName(name);
+            setIsInitializing(false);
+            setTimeout(() => handleSubmit(), 500);
+            return;
+          }
+
           setExamTimeSec(allocatedDurationSec);
           const freshSession = {
             startTime: Date.now(),
