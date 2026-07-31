@@ -402,7 +402,6 @@ export default function AdminPage() {
       const data = await res.json();
       if (data.success) {
         setIsAuthenticated(true);
-        sessionStorage.setItem("adminAuthenticated", "true");
         fetchResults();
       } else {
         setLoginError("Invalid password. Please try again.");
@@ -414,20 +413,33 @@ export default function AdminPage() {
     }
   };
 
-  const handleLogout = () => {
-    sessionStorage.removeItem("adminAuthenticated");
-    setIsAuthenticated(false);
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/admin/logout", { method: "POST" });
+    } catch (err) {
+      console.error("Logout error:", err);
+    } finally {
+      setIsAuthenticated(false);
+    }
   };
 
   useEffect(() => {
     setIsClient(true);
-    const sessionAuth = sessionStorage.getItem("adminAuthenticated");
-    if (sessionAuth === "true") {
-      setIsAuthenticated(true);
-      fetchResults();
-    } else {
-      setLoading(false);
-    }
+    fetch("/api/admin/check-auth")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.authenticated) {
+          setIsAuthenticated(true);
+          fetchResults();
+        } else {
+          setIsAuthenticated(false);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        setIsAuthenticated(false);
+        setLoading(false);
+      });
   }, []);
 
   // Fetch student accounts when switching to the "Only Students" tab
@@ -601,12 +613,14 @@ export default function AdminPage() {
               Examination Management & Control Dashboard
             </p>
           </div>
-          <Button variant="secondary" size="sm" onClick={fetchResults}>
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            Refresh Data
-          </Button>
+          {adminNavTab !== "exams" && (
+            <Button variant="secondary" size="sm" onClick={fetchResults}>
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Refresh Data
+            </Button>
+          )}
         </div>
 
         {/* SECTION 1: Student Results */}

@@ -162,7 +162,13 @@ export default function ResultsCard({ result, questions }: ResultsCardProps) {
         </button>
 
         <button
-          onClick={() => downloadExamScorecardPDF(result)}
+          onClick={() => {
+            try {
+              downloadExamScorecardPDF(result);
+            } catch (err) {
+              console.error("Error generating PDF scorecard:", err);
+            }
+          }}
           className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gold-500/20 text-gold-400 hover:bg-gold-500 hover:text-navy-950 font-bold transition-all cursor-pointer border border-gold-500/40 shadow-lg"
         >
           📄 Download PDF Scorecard

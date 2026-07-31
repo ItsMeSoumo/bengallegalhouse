@@ -11,10 +11,20 @@ interface ExamHeaderProps {
 }
 
 export default function ExamHeader({
-  timeLeft,
-  candidateName,
+  timeLeft = 0,
+  candidateName = "Candidate",
   onSubmit,
 }: ExamHeaderProps) {
+  const handleSubmitClick = () => {
+    try {
+      if (typeof onSubmit === "function") {
+        onSubmit();
+      }
+    } catch (err) {
+      console.error("Error executing onSubmit in ExamHeader:", err);
+    }
+  };
+
   return (
     <header className="sticky top-0 z-50 glass-card !rounded-none border-x-0 border-t-0 px-4 md:px-8 py-3">
       <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -34,7 +44,7 @@ export default function ExamHeader({
             <h1 className="text-sm font-bold text-gradient-gold">
               {EXAM_INFO.title}
             </h1>
-            <p className="text-xs text-foreground/40">{candidateName}</p>
+            <p className="text-xs text-foreground/40">{candidateName || "Candidate"}</p>
           </div>
         </div>
 
@@ -42,7 +52,7 @@ export default function ExamHeader({
         <Timer timeLeft={timeLeft} />
 
         {/* Right — Submit */}
-        <Button variant="danger" size="sm" onClick={onSubmit}>
+        <Button variant="danger" size="sm" onClick={handleSubmitClick}>
           <svg
             className="w-4 h-4"
             fill="none"
@@ -62,3 +72,4 @@ export default function ExamHeader({
     </header>
   );
 }
+

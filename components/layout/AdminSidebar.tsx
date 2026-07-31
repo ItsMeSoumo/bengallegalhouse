@@ -13,6 +13,16 @@ export default function AdminSidebar({
   setActiveTab,
   onLogout,
 }: AdminSidebarProps) {
+  const handleLogoutClick = () => {
+    try {
+      if (typeof onLogout === "function") {
+        onLogout();
+      }
+    } catch (err) {
+      console.error("Error executing onLogout in AdminSidebar:", err);
+    }
+  };
+
   return (
     <aside className="w-full md:w-64 glass-card !rounded-none md:!rounded-2xl border-y-0 md:border-y border-l-0 md:border-navy-700/60 p-5 flex flex-col justify-between shrink-0">
       <div className="space-y-6">
@@ -130,7 +140,7 @@ export default function AdminSidebar({
           variant="secondary"
           size="sm"
           className="w-full flex items-center justify-center gap-2 text-danger hover:bg-danger/10 border-danger/20"
-          onClick={onLogout}
+          onClick={handleLogoutClick}
         >
           <svg
             className="w-4 h-4"

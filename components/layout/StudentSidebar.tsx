@@ -11,15 +11,23 @@ interface StudentSidebarProps {
 }
 
 export default function StudentSidebar({
-  studentName,
+  studentName = "Student",
   activeTab,
   setActiveTab,
 }: StudentSidebarProps) {
   const router = useRouter();
 
   const handleLogout = () => {
-    sessionStorage.removeItem("candidateName");
-    router.push("/");
+    try {
+      if (typeof window !== "undefined") {
+        sessionStorage.removeItem("candidateName");
+        sessionStorage.removeItem("candidateEmail");
+      }
+      router.push("/");
+    } catch (error) {
+      console.error("Error logging out in StudentSidebar:", error);
+      router.push("/");
+    }
   };
 
   return (

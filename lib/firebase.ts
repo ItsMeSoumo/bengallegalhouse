@@ -88,7 +88,7 @@ export interface StudentUserRecord {
   id: string;
   name: string;
   email: string;
-  createdAt?: any;
+  createdAt?: string | number | null;
 }
 
 export async function registerStudentUserInDB(
@@ -611,9 +611,20 @@ export async function getCandidateExamResults(
 
 export const EXAMS_COLLECTION = "exam_papers";
 
+function cleanUndefinedFields<T extends Record<string, unknown>>(obj: T): Record<string, unknown> {
+  const cleaned: Record<string, unknown> = {};
+  Object.keys(obj).forEach((key) => {
+    if (obj[key] !== undefined) {
+      cleaned[key] = obj[key];
+    }
+  });
+  return cleaned;
+}
+
 export async function saveExamPaperInDB(paper: ExamPaper): Promise<boolean> {
   try {
-    await setDoc(doc(db, EXAMS_COLLECTION, paper.id), paper, { merge: true });
+    const cleaned = cleanUndefinedFields(paper as unknown as Record<string, unknown>);
+    await setDoc(doc(db, EXAMS_COLLECTION, paper.id), cleaned, { merge: true });
     return true;
   } catch (err) {
     console.warn("Error saving exam paper in Firestore DB:", err);
@@ -634,7 +645,8 @@ export async function deleteExamPaperInDB(paperId: string): Promise<boolean> {
 export async function seedExamPapersToDB(initialPapers: ExamPaper[]): Promise<boolean> {
   try {
     for (const paper of initialPapers) {
-      await setDoc(doc(db, EXAMS_COLLECTION, paper.id), paper, { merge: true });
+      const cleaned = cleanUndefinedFields(paper as unknown as Record<string, unknown>);
+      await setDoc(doc(db, EXAMS_COLLECTION, paper.id), cleaned, { merge: true });
     }
     return true;
   } catch (err) {

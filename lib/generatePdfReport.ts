@@ -4,10 +4,21 @@ import { serverQuestions as defaultQuestions } from "./serverQuestions";
 import { formatTime } from "./utils";
 
 export function downloadExamScorecardPDF(result: ResultDocument): void {
-  // Locate question list for this exam
-  const examPaper = result.examId ? getExamPaperById(result.examId) : undefined;
+  if (!result) {
+    console.error("Cannot generate PDF report: result object is null or undefined.");
+    return;
+  }
+
+  // Locate question list for this exam safely
+  let examPaper = undefined;
+  try {
+    examPaper = result.examId ? getExamPaperById(result.examId) : undefined;
+  } catch (err) {
+    console.error("Error fetching exam paper for PDF scorecard:", err);
+  }
+
   const questionList: ServerQuestion[] =
-    examPaper && examPaper.questions && examPaper.questions.length > 0
+    examPaper && Array.isArray(examPaper.questions) && examPaper.questions.length > 0
       ? examPaper.questions
       : defaultQuestions;
 

@@ -1,32 +1,33 @@
 "use client";
 
 import { formatTime, cn } from "@/lib/utils";
-import { TIMER_THRESHOLDS } from "@/lib/constants";
+import { TIMER_THRESHOLDS, EXAM_CONFIG } from "@/lib/constants";
 
 interface TimerProps {
   timeLeft: number;
+  totalDuration?: number;
   className?: string;
 }
 
-export default function Timer({ timeLeft, className }: TimerProps) {
+export default function Timer({ timeLeft = 0, totalDuration, className }: TimerProps) {
   const isDanger = timeLeft <= TIMER_THRESHOLDS.danger;
   const isWarning = timeLeft <= TIMER_THRESHOLDS.warning;
 
   const getColor = () => {
-    if (isDanger) return "text-danger";
+    if (timeLeft <= 0 || isDanger) return "text-danger";
     if (isWarning) return "text-warning";
     return "text-success";
   };
 
   const getProgressColor = () => {
-    if (isDanger) return "#ef4444";
+    if (timeLeft <= 0 || isDanger) return "#ef4444";
     if (isWarning) return "#f59e0b";
     return "#22c55e";
   };
 
-  // Calculate progress percentage (based on 30 min = 1800s)
-  const totalTime = 1800;
-  const progressPercent = (timeLeft / totalTime) * 100;
+  const totalTime = totalDuration || EXAM_CONFIG?.totalTime || 7200;
+  const safeTimeLeft = Math.max(0, timeLeft);
+  const progressPercent = totalTime > 0 ? (safeTimeLeft / totalTime) * 100 : 0;
 
   // SVG circle params
   const radius = 28;

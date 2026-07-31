@@ -1,5 +1,19 @@
+// ── Status & Enum Types ──────────────────────────────────────────────────────
+
+/** Exam availability status */
+export type ExamStatus = "active" | "paused";
+
+/** Question status for UI rendering in palette and controls */
+export type QuestionStatus =
+  | "unanswered"
+  | "answered"
+  | "marked"
+  | "marked-answered"
+  | "current";
+
 // ── Question Types ──────────────────────────────────────────────────────────
 
+/** Publicly safe question model stripped of correct answer and solution explanation */
 export interface PublicQuestion {
   id: number;
   question: string;
@@ -7,16 +21,18 @@ export interface PublicQuestion {
   subject: string;
 }
 
+/** Full server-side question model including evaluation key and explanatory details */
 export interface ServerQuestion extends PublicQuestion {
   correctAnswer: number; // index of correct option (0-3)
   explanation?: string;
 }
 
-// Retain Question interface as alias for public view or admin view
+/** Alias for question representation */
 export type Question = PublicQuestion;
 
 // ── Exam Paper Management ───────────────────────────────────────────────────
 
+/** Definition of an examination paper configured by administrators */
 export interface ExamPaper {
   id: string;
   title: string;
@@ -27,7 +43,7 @@ export interface ExamPaper {
   negativeMarks: number;
   passingPercentage: number;
   maxAttempts: number; // 0 = unlimited, 1, 2, 3, etc.
-  status: "active" | "paused";
+  status: ExamStatus;
   isPrivate?: boolean; // true = hidden from students, false/undefined = public/visible
   questions: ServerQuestion[];
   // ── Exam Scheduling (optional) ──
@@ -38,6 +54,7 @@ export interface ExamPaper {
 
 // ── Exam Configuration ─────────────────────────────────────────────────────
 
+/** Configuration defaults for exam grading and time boundaries */
 export interface ExamConfig {
   totalTime: number; // in seconds
   marksPerCorrect: number;
@@ -48,13 +65,7 @@ export interface ExamConfig {
 
 // ── Exam State ──────────────────────────────────────────────────────────────
 
-export type QuestionStatus =
-  | "unanswered"
-  | "answered"
-  | "marked"
-  | "marked-answered"
-  | "current";
-
+/** Dynamic runtime state for student taking an active examination */
 export interface ExamState {
   candidateName: string;
   currentQuestionIndex: number;
@@ -70,6 +81,7 @@ export interface ExamState {
 
 // ── Results ─────────────────────────────────────────────────────────────────
 
+/** Evaluated result metrics for a completed examination */
 export interface ExamResult {
   examId?: string;
   examTitle?: string;
@@ -92,7 +104,9 @@ export interface ExamResult {
 
 // ── Firebase Document ───────────────────────────────────────────────────────
 
+/** Firestore database document structure for exam results */
 export interface ResultDocument extends ExamResult {
   id?: string;
   studentDocId?: string;
 }
+

@@ -4,6 +4,9 @@ import { ExamResult, ExamState, ServerQuestion, QuestionStatus } from "./types";
 // ── Time Formatting ─────────────────────────────────────────────────────────
 
 export function formatTime(totalSeconds: number): string {
+  if (typeof totalSeconds !== "number" || isNaN(totalSeconds) || totalSeconds < 0) {
+    return "00:00";
+  }
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
@@ -23,14 +26,18 @@ export function calculateScore(
   percentage: number;
   passed: boolean;
 } {
+  const safeAnswers = Array.isArray(answers) ? answers : [];
+  const safeQuestions = Array.isArray(questions) ? questions : [];
+
   let correctCount = 0;
   let wrongCount = 0;
   let unansweredCount = 0;
 
-  answers.forEach((answer, index) => {
+  safeQuestions.forEach((q, index) => {
+    const answer = safeAnswers[index];
     if (answer === null || answer === undefined) {
       unansweredCount++;
-    } else if (index < questions.length && answer === questions[index].correctAnswer) {
+    } else if (q && typeof q.correctAnswer === "number" && answer === q.correctAnswer) {
       correctCount++;
     } else {
       wrongCount++;
@@ -38,14 +45,15 @@ export function calculateScore(
   });
 
   const rawMarks =
-    correctCount * EXAM_CONFIG.marksPerCorrect -
-    wrongCount * EXAM_CONFIG.negativeMarks;
+    correctCount * (EXAM_CONFIG?.marksPerCorrect ?? 1) -
+    wrongCount * (EXAM_CONFIG?.negativeMarks ?? 0.25);
 
   const totalMarks = Math.round(rawMarks * 100) / 100;
 
-  const maxMarks = questions.length * EXAM_CONFIG.marksPerCorrect;
-  const percentage = (totalMarks / maxMarks) * 100;
-  const passed = percentage >= EXAM_CONFIG.passingPercentage;
+  const maxMarks = safeQuestions.length * (EXAM_CONFIG?.marksPerCorrect ?? 1);
+  const percentage = maxMarks > 0 ? (totalMarks / maxMarks) * 100 : 0;
+  const passingPercentage = EXAM_CONFIG?.passingPercentage ?? 40;
+  const passed = percentage >= passingPercentage;
 
   return {
     correctCount,
@@ -64,10 +72,15 @@ export function getQuestionStatus(
   index: number,
   state: ExamState
 ): QuestionStatus {
+  if (!state || typeof index !== "number" || index < 0) return "unanswered";
+
   if (index === state.currentQuestionIndex) return "current";
 
-  const isAnswered = state.answers[index] !== null;
-  const isMarked = state.markedForReview[index];
+  const answers = Array.isArray(state.answers) ? state.answers : [];
+  const markedForReview = Array.isArray(state.markedForReview) ? state.markedForReview : [];
+
+  const isAnswered = answers[index] !== null && answers[index] !== undefined;
+  const isMarked = Boolean(markedForReview[index]);
 
   if (isMarked && isAnswered) return "marked-answered";
   if (isMarked) return "marked";
@@ -81,18 +94,33 @@ export function buildExamResult(
   state: ExamState,
   questions: ServerQuestion[]
 ): ExamResult {
-  const scoreData = calculateScore(state.answers, questions);
-  const timeTaken = state.endTime
-    ? Math.floor((state.endTime - state.startTime) / 1000)
-    : EXAM_CONFIG.totalTime;
+  const safeState: ExamState = state || {
+    candidateName: "Candidate",
+    currentQuestionIndex: 0,
+    answers: [],
+    markedForReview: [],
+    visitedQuestions: [],
+    isSubmitted: true,
+    startTime: Date.now(),
+    endTime: Date.now(),
+    tabSwitchCount: 0,
+  };
+  const safeQuestions = Array.isArray(questions) ? questions : [];
+
+  const scoreData = calculateScore(safeState.answers, safeQuestions);
+  const totalTime = EXAM_CONFIG?.totalTime ?? 1800;
+  const timeTaken =
+    typeof safeState.endTime === "number" && typeof safeState.startTime === "number"
+      ? Math.max(0, Math.floor((safeState.endTime - safeState.startTime) / 1000))
+      : totalTime;
 
   return {
-    candidateName: state.candidateName,
-    totalQuestions: questions.length,
+    candidateName: safeState.candidateName || "Candidate",
+    totalQuestions: safeQuestions.length,
     ...scoreData,
     timeTaken,
     submittedAt: new Date().toISOString(),
-    answers: state.answers,
+    answers: safeState.answers || [],
   };
 }
 
@@ -101,3 +129,4 @@ export function buildExamResult(
 export function cn(...classes: (string | boolean | undefined | null)[]): string {
   return classes.filter(Boolean).join(" ");
 }
+

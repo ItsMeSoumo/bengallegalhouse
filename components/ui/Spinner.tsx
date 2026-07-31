@@ -21,7 +21,11 @@ export default function Spinner({
   };
 
   return (
-    <div className={`flex flex-col items-center justify-center gap-3 ${className}`}>
+    <div
+      role="status"
+      aria-label={label || "Loading..."}
+      className={`flex flex-col items-center justify-center gap-3 ${className}`}
+    >
       <div className="relative flex items-center justify-center">
         {/* Glowing aura */}
         <div
@@ -31,7 +35,7 @@ export default function Spinner({
         />
         {/* Animated spinner ring */}
         <div
-          className={`${sizeClasses[size]} rounded-full border-t-gold-400 border-r-gold-500/40 border-b-navy-800 border-l-gold-500/20 animate-spin`}
+          className={`${sizeClasses[size] || sizeClasses.md} rounded-full border-t-gold-400 border-r-gold-500/40 border-b-navy-800 border-l-gold-500/20 animate-spin`}
         />
       </div>
       {label && (
@@ -39,6 +43,7 @@ export default function Spinner({
           {label}
         </p>
       )}
+      <span className="sr-only">{label || "Loading..."}</span>
     </div>
   );
 }

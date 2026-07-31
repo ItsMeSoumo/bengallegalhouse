@@ -13,8 +13,8 @@ interface NumericInputProps {
 }
 
 export default function NumericInput({
-  value,
-  onChange,
+  value = 0,
+  onChange = () => {},
   className = "",
   step = 1,
   min,
@@ -29,7 +29,7 @@ export default function NumericInput({
     if (!isFocused) {
       setDisplayValue(String(value ?? 0));
     }
-  }, [value, isFocused]);
+  }, [value, isFocused, step, min, max]);
 
   const handleFocus = () => {
     setIsFocused(true);
@@ -42,22 +42,38 @@ export default function NumericInput({
     if (raw === "" || raw === "-") {
       onChange(0);
     } else {
-      const parsed = parseFloat(raw);
-      if (!isNaN(parsed)) {
-        onChange(parsed);
+      try {
+        const parsed = parseFloat(raw);
+        if (!isNaN(parsed)) {
+          let finalVal = parsed;
+          if (typeof min === "number" && finalVal < min) finalVal = min;
+          if (typeof max === "number" && finalVal > max) finalVal = max;
+          onChange(finalVal);
+        }
+      } catch (err) {
+        console.error("Error parsing input value in NumericInput:", err);
       }
     }
   };
 
   const handleBlur = () => {
     setIsFocused(false);
-    if (displayValue === "" || displayValue === "-" || isNaN(parseFloat(displayValue))) {
+    try {
+      if (displayValue === "" || displayValue === "-" || isNaN(parseFloat(displayValue))) {
+        const fallback = typeof min === "number" ? min : 0;
+        setDisplayValue(String(fallback));
+        onChange(fallback);
+      } else {
+        let parsed = parseFloat(displayValue);
+        if (typeof min === "number" && parsed < min) parsed = min;
+        if (typeof max === "number" && parsed > max) parsed = max;
+        setDisplayValue(String(parsed));
+        onChange(parsed);
+      }
+    } catch (err) {
+      console.error("Error in handleBlur in NumericInput:", err);
       setDisplayValue("0");
       onChange(0);
-    } else {
-      const parsed = parseFloat(displayValue);
-      setDisplayValue(String(parsed));
-      onChange(parsed);
     }
   };
 
@@ -76,3 +92,4 @@ export default function NumericInput({
     />
   );
 }
+

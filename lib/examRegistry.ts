@@ -14,6 +14,19 @@ import {
 // Metadata-only exam papers (questions: [] — loaded from DB at runtime)
 export const initialExamPapers: ExamPaper[] = [
   {
+    id: "culet-2026-comprehensive-mock-3",
+    title: "Comprehensive Mock Examination & Practice Booklet 2026",
+    subtitle: "Advanced Multidisciplinary Assessment (100 Questions)",
+    description: "Full 100-question multidisciplinary assessment paper covering Vocabulary, Quantitative Aptitude, Constitution, Legal Principles, and Reasoning.",
+    totalTimeMinutes: 120,
+    marksPerCorrect: 1,
+    negativeMarks: 0.25,
+    passingPercentage: 40,
+    maxAttempts: 1,
+    status: "active",
+    questions: [], // Loaded from Firestore DB at runtime
+  },
+  {
     id: "culet-2026-hard-mixed",
     title: "CULET-2026 MOCK TEST — HARD MIXED SET",
     subtitle: "Comprehensive Law Practice Exam",
@@ -76,7 +89,10 @@ function loadFromStorage(): ExamPaper[] {
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed)) {
-          return parsed.map((p: ExamPaper) => ({ ...p, questions: p.questions || [] }));
+          return parsed.map((p: ExamPaper) => ({
+            ...p,
+            questions: Array.isArray(p?.questions) ? p.questions : [],
+          }));
         }
       }
     } catch (e) {
@@ -97,14 +113,32 @@ function saveToStorage(papers: ExamPaper[]): void {
   }
 }
 
+// Helper to save paper array to local storage and sync with Firestore DB
+function persistPapersAndSync(papers: ExamPaper[], targetPaper?: ExamPaper, deleteId?: string): void {
+  try {
+    saveToStorage(papers);
+    if (targetPaper) {
+      saveExamPaperInDB(targetPaper).catch((err) =>
+        console.error("DB save failed for exam paper:", targetPaper.id, err)
+      );
+    }
+    if (deleteId) {
+      deleteExamPaperInDB(deleteId).catch((err) =>
+        console.error("DB delete failed for exam paper ID:", deleteId, err)
+      );
+    }
+  } catch (err) {
+    console.error("Error in persistPapersAndSync:", err);
+  }
+}
+
 // In-memory global store initialized from storage
 let currentExamPapers: ExamPaper[] = loadFromStorage();
-
 
 export async function syncExamPapersWithDB(): Promise<ExamPaper[]> {
   try {
     const dbPapers = await getExamPapersFromDB(initialExamPapers);
-    if (dbPapers && dbPapers.length > 0) {
+    if (Array.isArray(dbPapers) && dbPapers.length > 0) {
       saveToStorage(dbPapers);
       return dbPapers;
     }
@@ -115,51 +149,69 @@ export async function syncExamPapersWithDB(): Promise<ExamPaper[]> {
 }
 
 export function getExamPapers(): ExamPaper[] {
-  currentExamPapers = loadFromStorage();
-  return currentExamPapers;
+  try {
+    currentExamPapers = loadFromStorage();
+    return currentExamPapers || [];
+  } catch (err) {
+    console.error("Error in getExamPapers:", err);
+    return initialExamPapers;
+  }
 }
 
 export function getExamPaperById(id: string): ExamPaper | undefined {
-  const papers = getExamPapers();
-  return papers.find((p) => p.id === id);
+  if (!id) return undefined;
+  try {
+    const papers = getExamPapers();
+    return papers.find((p) => p && p.id === id);
+  } catch (err) {
+    console.error("Error in getExamPaperById:", err);
+    return undefined;
+  }
 }
 
 export function addExamPaper(paper: ExamPaper): void {
+  if (!paper || !paper.id) return;
   const papers = getExamPapers();
   papers.push(paper);
-  saveToStorage(papers);
-  saveExamPaperInDB(paper);
+  persistPapersAndSync(papers, paper);
 }
 
 export function updateExamPaper(updated: ExamPaper): void {
+  if (!updated || !updated.id) return;
   const papers = getExamPapers();
-  const idx = papers.findIndex((p) => p.id === updated.id);
+  const idx = papers.findIndex((p) => p && p.id === updated.id);
   if (idx !== -1) {
     papers[idx] = updated;
-    saveToStorage(papers);
-    saveExamPaperInDB(updated);
+    persistPapersAndSync(papers, updated);
   }
 }
 
 export function deleteExamPaper(id: string): void {
+  if (!id) return;
   const papers = getExamPapers();
-  const filtered = papers.filter((p) => p.id !== id);
-  saveToStorage(filtered);
-  deleteExamPaperInDB(id);
+  const filtered = papers.filter((p) => p && p.id !== id);
+  persistPapersAndSync(filtered, undefined, id);
 }
 
 export function addQuestionToExam(examId: string, newQ: ServerQuestion): void {
+  if (!examId || !newQ) return;
   const papers = getExamPapers();
-  const paper = papers.find((p) => p.id === examId);
+  const paper = papers.find((p) => p && p.id === examId);
   if (paper) {
-    if (!paper.questions) paper.questions = [];
+    if (!Array.isArray(paper.questions)) paper.questions = [];
     paper.questions.push(newQ);
-    saveToStorage(papers);
-    saveExamPaperInDB(paper);
+    persistPapersAndSync(papers, paper);
   }
 }
 
 export function resetExamPapersToDefault(): void {
-  saveToStorage([...initialExamPapers]);
-  seedExamPapersToDB(initialExamPapers);
+  try {
+    saveToStorage([...initialExamPapers]);
+    seedExamPapersToDB(initialExamPapers).catch((err) =>
+      console.error("Error seeding default papers to DB:", err)
+    );
+  } catch (err) {
+    console.error("Error in resetExamPapersToDefault:", err);
+  }
 }
+

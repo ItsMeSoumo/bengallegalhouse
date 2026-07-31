@@ -1,8 +1,8 @@
 "use client";
 
+import React from "react";
 import { ExamState, QuestionStatus } from "@/lib/types";
 import { getQuestionStatus, cn } from "@/lib/utils";
-import { PALETTE_COLORS } from "@/lib/constants";
 
 interface QuestionPaletteProps {
   totalQuestions: number;
@@ -26,6 +26,8 @@ export default function QuestionPalette({
       case "marked":
         return "bg-warning/80 text-navy-950 border-warning";
       case "unanswered":
+        return "bg-navy-700/60 text-foreground/50 border-navy-600/40";
+      default:
         return "bg-navy-700/60 text-foreground/50 border-navy-600/40";
     }
   };
@@ -69,11 +71,18 @@ export default function QuestionPalette({
   );
 }
 
-function LegendItem({ color, label }: { color: string; label: string }) {
+const LegendItem = React.memo(function LegendItem({
+  color,
+  label,
+}: {
+  color: string;
+  label: string;
+}) {
   return (
     <div className="flex items-center gap-2">
       <span className={cn("w-4 h-4 rounded", color)} />
       <span className="text-foreground/60">{label}</span>
     </div>
   );
-}
+});
+

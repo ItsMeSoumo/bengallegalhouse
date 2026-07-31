@@ -9,7 +9,6 @@ import Spinner from "@/components/ui/Spinner";
 import { getExamPapers, syncExamPapersWithDB } from "@/lib/examRegistry";
 import { getCandidateExamResults } from "@/lib/firebase";
 import { ExamPaper, ResultDocument } from "@/lib/types";
-import { downloadExamScorecardPDF } from "@/lib/generatePdfReport";
 
 function formatTime12h(time24Str?: string): string {
   if (!time24Str || !time24Str.includes(":")) return time24Str || "";
@@ -38,10 +37,22 @@ export default function StudentDashboard() {
   const [selectedPaperToStart, setSelectedPaperToStart] = useState<ExamPaper | null>(null);
   const [limitReachedPaper, setLimitReachedPaper] = useState<ExamPaper | null>(null);
 
+  const fetchMyResults = useCallback(async (name: string, email: string) => {
+    setLoadingResults(true);
+    try {
+      const myResults = await getCandidateExamResults(name, email);
+      setPastResults(myResults || []);
+    } catch (err) {
+      console.error("Error fetching my results:", err);
+    } finally {
+      setLoadingResults(false);
+    }
+  }, []);
+
   // Authentication Protection Check
   useEffect(() => {
     setIsClient(true);
-    const name = sessionStorage.getItem("candidateName");
+    const name = sessionStorage.getItem("candidateName") || "";
     const email = sessionStorage.getItem("candidateEmail") || "";
     if (!name) {
       router.push("/");
@@ -50,9 +61,11 @@ export default function StudentDashboard() {
     setStudentName(name);
     setStudentEmail(email);
     setExamPapers(getExamPapers());
-    syncExamPapersWithDB().then(setExamPapers);
+    syncExamPapersWithDB().then(setExamPapers).catch((err) =>
+      console.error("Error syncing exam papers in dashboard:", err)
+    );
     fetchMyResults(name, email);
-  }, [router]);
+  }, [router, fetchMyResults]);
 
   // Real-time clock tick for schedule gating
   useEffect(() => {
@@ -75,20 +88,24 @@ export default function StudentDashboard() {
     return "closed";
   }, [currentTime]);
 
-  const fetchMyResults = async (name: string, email: string) => {
-    setLoadingResults(true);
-    try {
-      const myResults = await getCandidateExamResults(name, email);
-      setPastResults(myResults);
-    } catch (err) {
-      console.error("Error fetching my results:", err);
-    } finally {
-      setLoadingResults(false);
-    }
-  };
+  const getAttemptsTakenForPaper = useCallback(
+    (paper: ExamPaper, resultsList: ResultDocument[]): number => {
+      if (!paper || !Array.isArray(resultsList)) return 0;
+      const pId = paper.id;
+      const pTitle = (paper.title || "").trim().toLowerCase();
+
+      return resultsList.filter((r) => {
+        if (!r) return false;
+        if (r.examId && r.examId === pId) return true;
+        if (r.examTitle && r.examTitle.trim().toLowerCase() === pTitle) return true;
+        return false;
+      }).length;
+    },
+    []
+  );
 
   const handleStartExamClick = (paper: ExamPaper) => {
-    const attemptsTaken = pastResults.filter((r) => r.examId === paper.id).length;
+    const attemptsTaken = getAttemptsTakenForPaper(paper, pastResults);
     const maxAllowed = paper.maxAttempts || 0;
 
     if (maxAllowed > 0 && attemptsTaken >= maxAllowed) {
@@ -136,6 +153,34 @@ export default function StudentDashboard() {
               Law Entrance Examination Student Dashboard
             </p>
           </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="flex items-center gap-2"
+            disabled={loadingResults}
+            onClick={() => {
+              setLoadingResults(true);
+              syncExamPapersWithDB()
+                .then(setExamPapers)
+                .catch((err) => console.error("Error refreshing papers:", err));
+              fetchMyResults(studentName, studentEmail);
+            }}
+          >
+            <svg
+              className={`w-4 h-4 ${loadingResults ? "animate-spin" : ""}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+            <span>{loadingResults ? "Refreshing..." : "Refresh Data"}</span>
+          </Button>
         </div>
 
         {/* Tab 1: Available Exams */}
@@ -161,7 +206,7 @@ export default function StudentDashboard() {
               return (
                 <div className="space-y-6">
                   {visiblePapers.map((paper) => {
-                    const attemptsTaken = pastResults.filter((r) => r.examId === paper.id).length;
+                    const attemptsTaken = getAttemptsTakenForPaper(paper, pastResults);
                     const maxAllowed = paper.maxAttempts || 0; // 0 = unlimited
                     const isLimitReached = maxAllowed > 0 && attemptsTaken >= maxAllowed;
                     const scheduleStatus = getScheduleStatus(paper);
@@ -292,7 +337,7 @@ export default function StudentDashboard() {
                             const [sh, sm] = paper.scheduledStartTime.split(":").map(Number);
                             const [eh, em] = paper.scheduledEndTime.split(":").map(Number);
                             if (!isNaN(sh) && !isNaN(sm) && !isNaN(eh) && !isNaN(em)) {
-                              let sMins = sh * 60 + sm;
+                              const sMins = sh * 60 + sm;
                               let eMins = eh * 60 + em;
                               if (eMins <= sMins) eMins += 1440;
                               const diff = eMins - sMins;
@@ -392,9 +437,8 @@ export default function StudentDashboard() {
 
       {/* ── PRE-EXAM START CONFIRMATION MODAL ── */}
       {selectedPaperToStart && (() => {
-        const attemptsTaken = pastResults.filter((r) => r.examId === selectedPaperToStart.id).length;
+        const attemptsTaken = getAttemptsTakenForPaper(selectedPaperToStart, pastResults);
         const maxAllowed = selectedPaperToStart.maxAttempts || 0;
-        const attemptNumber = attemptsTaken + 1;
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

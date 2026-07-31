@@ -13,17 +13,22 @@ export default function ResultsPage() {
   const [result, setResult] = useState<ExamResult | null>(null);
 
   useEffect(() => {
-    const storedResult = sessionStorage.getItem("examResult");
-    const candidateName = sessionStorage.getItem("candidateName");
+    try {
+      const storedResult = sessionStorage.getItem("examResult");
+      const candidateName = sessionStorage.getItem("candidateName");
 
-    // If no active candidate session or result, redirect to home login
-    if (!candidateName && !storedResult) {
+      // If no active candidate session or result, redirect to home login
+      if (!candidateName && !storedResult) {
+        router.push("/");
+        return;
+      }
+
+      if (storedResult) {
+        setResult(JSON.parse(storedResult));
+      }
+    } catch (error) {
+      console.error("Error parsing stored exam result:", error);
       router.push("/");
-      return;
-    }
-
-    if (storedResult) {
-      setResult(JSON.parse(storedResult));
     }
   }, [router]);
 

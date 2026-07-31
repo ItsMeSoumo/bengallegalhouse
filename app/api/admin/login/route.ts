@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createHash } from "crypto";
+import { createAdminToken, setAdminSessionCookie } from "@/lib/adminAuth";
 
 export async function POST(request: Request) {
   try {
@@ -11,7 +12,9 @@ export async function POST(request: Request) {
     const computedHash = createHash("sha256").update(adminPassword).digest("hex");
 
     if (passwordHash === computedHash) {
-      console.log(`🔑 [API POST: /api/admin/login] Password match! Admin authorized.`);
+      console.log(`🔑 [API POST: /api/admin/login] Password match! Admin authorized. Issuing secure HTTP-Only cookie...`);
+      const token = createAdminToken();
+      await setAdminSessionCookie(token);
       return NextResponse.json({ success: true });
     }
 

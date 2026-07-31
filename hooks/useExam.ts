@@ -3,6 +3,25 @@
 import { useState, useCallback } from "react";
 import { ExamState, Question } from "@/lib/types";
 
+/**
+ * Type guard to verify if an unknown object conforms to the ExamState interface structure.
+ */
+export function isValidExamState(obj: unknown): obj is ExamState {
+  if (typeof obj !== "object" || obj === null) return false;
+  const s = obj as Record<string, unknown>;
+  return (
+    typeof s.candidateName === "string" &&
+    typeof s.currentQuestionIndex === "number" &&
+    Array.isArray(s.answers) &&
+    Array.isArray(s.markedForReview) &&
+    Array.isArray(s.visitedQuestions) &&
+    typeof s.isSubmitted === "boolean" &&
+    typeof s.startTime === "number" &&
+    (s.endTime === null || typeof s.endTime === "number") &&
+    typeof s.tabSwitchCount === "number"
+  );
+}
+
 interface UseExamReturn {
   state: ExamState;
   selectAnswer: (optionIndex: number) => void;
@@ -15,47 +34,70 @@ interface UseExamReturn {
   incrementTabSwitch: () => number;
 }
 
+const createInitialState = (totalQuestions: number): ExamState => ({
+  candidateName: "",
+  currentQuestionIndex: 0,
+  answers: new Array(totalQuestions).fill(null),
+  markedForReview: new Array(totalQuestions).fill(false),
+  visitedQuestions: new Array(totalQuestions).fill(false),
+  isSubmitted: false,
+  startTime: Date.now(),
+  endTime: null,
+  tabSwitchCount: 0,
+});
+
 export function useExam(questions: Question[]): UseExamReturn {
-  const [state, setState] = useState<ExamState>({
-    candidateName: "",
-    currentQuestionIndex: 0,
-    answers: new Array(questions.length).fill(null),
-    markedForReview: new Array(questions.length).fill(false),
-    visitedQuestions: new Array(questions.length).fill(false),
-    isSubmitted: false,
-    startTime: Date.now(),
-    endTime: null,
-    tabSwitchCount: 0,
-  });
+  const totalQuestions = questions.length;
+  const [state, setState] = useState<ExamState>(() => createInitialState(totalQuestions));
 
   const initExam = useCallback(
     (candidateName: string, restoredState?: Partial<ExamState>) => {
-      setState({
-        candidateName,
-        currentQuestionIndex: restoredState?.currentQuestionIndex ?? 0,
-        answers:
-          restoredState?.answers && restoredState.answers.length === questions.length
+      setState(() => {
+        const defaultState = createInitialState(totalQuestions);
+        if (!restoredState) {
+          return { ...defaultState, candidateName };
+        }
+
+        const answers =
+          Array.isArray(restoredState.answers) && restoredState.answers.length === totalQuestions
             ? restoredState.answers
-            : new Array(questions.length).fill(null),
-        markedForReview:
-          restoredState?.markedForReview && restoredState.markedForReview.length === questions.length
+            : defaultState.answers;
+
+        const markedForReview =
+          Array.isArray(restoredState.markedForReview) && restoredState.markedForReview.length === totalQuestions
             ? restoredState.markedForReview
-            : new Array(questions.length).fill(false),
-        visitedQuestions:
-          restoredState?.visitedQuestions && restoredState.visitedQuestions.length === questions.length
+            : defaultState.markedForReview;
+
+        const visitedQuestions =
+          Array.isArray(restoredState.visitedQuestions) && restoredState.visitedQuestions.length === totalQuestions
             ? restoredState.visitedQuestions
             : (() => {
-                const visited = new Array(questions.length).fill(false);
-                visited[0] = true;
+                const visited = new Array(totalQuestions).fill(false);
+                if (totalQuestions > 0) visited[0] = true;
                 return visited;
-              })(),
-        isSubmitted: restoredState?.isSubmitted || false,
-        startTime: restoredState?.startTime || Date.now(),
-        endTime: restoredState?.endTime || null,
-        tabSwitchCount: restoredState?.tabSwitchCount || 0,
+              })();
+
+        const newState: ExamState = {
+          candidateName: candidateName || restoredState.candidateName || "",
+          currentQuestionIndex:
+            typeof restoredState.currentQuestionIndex === "number" &&
+            restoredState.currentQuestionIndex >= 0 &&
+            restoredState.currentQuestionIndex < totalQuestions
+              ? restoredState.currentQuestionIndex
+              : 0,
+          answers,
+          markedForReview,
+          visitedQuestions,
+          isSubmitted: Boolean(restoredState.isSubmitted),
+          startTime: typeof restoredState.startTime === "number" ? restoredState.startTime : Date.now(),
+          endTime: typeof restoredState.endTime === "number" ? restoredState.endTime : null,
+          tabSwitchCount: typeof restoredState.tabSwitchCount === "number" ? restoredState.tabSwitchCount : 0,
+        };
+
+        return isValidExamState(newState) ? newState : defaultState;
       });
     },
-    [questions.length]
+    [totalQuestions]
   );
 
   const selectAnswer = useCallback((optionIndex: number) => {
@@ -76,7 +118,7 @@ export function useExam(questions: Question[]): UseExamReturn {
 
   const nextQuestion = useCallback(() => {
     setState((prev) => {
-      if (prev.currentQuestionIndex >= questions.length - 1) return prev;
+      if (prev.currentQuestionIndex >= totalQuestions - 1) return prev;
       const nextIdx = prev.currentQuestionIndex + 1;
       const newVisited = [...prev.visitedQuestions];
       newVisited[nextIdx] = true;
@@ -86,7 +128,7 @@ export function useExam(questions: Question[]): UseExamReturn {
         visitedQuestions: newVisited,
       };
     });
-  }, [questions.length]);
+  }, [totalQuestions]);
 
   const prevQuestion = useCallback(() => {
     setState((prev) => {
@@ -95,24 +137,26 @@ export function useExam(questions: Question[]): UseExamReturn {
     });
   }, []);
 
-  const jumpToQuestion = useCallback((index: number) => {
-    setState((prev) => {
-      if (index < 0 || index >= questions.length) return prev;
-      const newVisited = [...prev.visitedQuestions];
-      newVisited[index] = true;
-      return {
-        ...prev,
-        currentQuestionIndex: index,
-        visitedQuestions: newVisited,
-      };
-    });
-  }, [questions.length]);
+  const jumpToQuestion = useCallback(
+    (index: number) => {
+      setState((prev) => {
+        if (index < 0 || index >= totalQuestions) return prev;
+        const newVisited = [...prev.visitedQuestions];
+        newVisited[index] = true;
+        return {
+          ...prev,
+          currentQuestionIndex: index,
+          visitedQuestions: newVisited,
+        };
+      });
+    },
+    [totalQuestions]
+  );
 
   const toggleMark = useCallback(() => {
     setState((prev) => {
       const newMarked = [...prev.markedForReview];
-      newMarked[prev.currentQuestionIndex] =
-        !newMarked[prev.currentQuestionIndex];
+      newMarked[prev.currentQuestionIndex] = !newMarked[prev.currentQuestionIndex];
       return { ...prev, markedForReview: newMarked };
     });
   }, []);
@@ -138,3 +182,4 @@ export function useExam(questions: Question[]): UseExamReturn {
     incrementTabSwitch,
   };
 }
+

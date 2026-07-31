@@ -39,12 +39,16 @@ export async function POST(request: Request) {
     const { candidateName, candidateEmail, answers, timeTaken, examId, tabSwitchCount, autoSubmitted } = body;
     const cleanEmail = candidateEmail?.trim().toLowerCase() || "N/A";
 
+    const safeLogName = String(candidateName || "").replace(/[\r\n]/g, "");
+    const safeLogEmail = String(cleanEmail || "").replace(/[\r\n]/g, "");
+    const safeExamId = String(examId || "").replace(/[\r\n]/g, "");
+
     console.log(`\n📝 [API POST: /api/exam/submit] Test submission received!
-        - Candidate Name: ${candidateName}
-        - Candidate Email: ${cleanEmail}
-        - Exam ID: ${examId}
+        - Candidate Name: ${safeLogName}
+        - Candidate Email: ${safeLogEmail}
+        - Exam ID: ${safeExamId}
         - Time Taken: ${timeTaken} seconds
-        - Total Answers Submitted: ${answers.length}`);
+        - Total Answers Submitted: ${Array.isArray(answers) ? answers.length : 0}`);
 
     if (!candidateName || !Array.isArray(answers)) {
       console.warn("⚠️ [API POST: /api/exam/submit] Invalid submission payload data!");

@@ -3,17 +3,21 @@
 import { useEffect, useState } from "react";
 
 export default function LiveClock() {
-  const [now, setNow] = useState<Date | null>(null);
+  const [currentTime, setCurrentTime] = useState<Date | null>(null);
 
   useEffect(() => {
-    setNow(new Date());
-    const interval = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(interval);
+    try {
+      setCurrentTime(new Date());
+      const interval = setInterval(() => setCurrentTime(new Date()), 1000);
+      return () => clearInterval(interval);
+    } catch (error) {
+      console.error("Error updating LiveClock:", error);
+    }
   }, []);
 
-  if (!now) return null;
+  if (!currentTime) return null;
 
-  const dateStr = now.toLocaleDateString("en-IN", {
+  const dateStr = currentTime.toLocaleDateString("en-IN", {
     weekday: "short",
     day: "2-digit",
     month: "short",
@@ -21,7 +25,7 @@ export default function LiveClock() {
     timeZone: "Asia/Kolkata",
   });
 
-  const timeStr = now.toLocaleTimeString("en-IN", {
+  const timeStr = currentTime.toLocaleTimeString("en-IN", {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
@@ -59,3 +63,4 @@ export default function LiveClock() {
     </div>
   );
 }
+

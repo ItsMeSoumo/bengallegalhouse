@@ -14,39 +14,52 @@ export function useTimer(
   totalSeconds: number,
   onExpire: () => void
 ): UseTimerReturn {
-  const [timeLeft, setTimeLeft] = useState(totalSeconds);
-  const [isRunning, setIsRunning] = useState(false);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [timeLeft, setTimeLeft] = useState<number>(totalSeconds);
+  const [isRunning, setIsRunning] = useState<boolean>(false);
+
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const endTimeRef = useRef<number | null>(null);
   const onExpireRef = useRef(onExpire);
 
-  // Keep the callback ref fresh
-  onExpireRef.current = onExpire;
+  // Keep callback reference updated safely in an effect
+  useEffect(() => {
+    onExpireRef.current = onExpire;
+  }, [onExpire]);
+
+  const clearTimer = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }, []);
 
   // Sync initial duration when totalSeconds prop changes before starting
   useEffect(() => {
     if (!isRunning) {
-      setTimeLeft(totalSeconds);
+      setTimeLeft((prev) => (prev !== totalSeconds ? totalSeconds : prev));
     }
   }, [totalSeconds, isRunning]);
 
-  const clearTimer = useCallback(() => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-  }, []);
-
   const start = useCallback(() => {
+    if (isRunning) return;
+    endTimeRef.current = Date.now() + (timeLeft > 0 ? timeLeft : totalSeconds) * 1000;
     setIsRunning(true);
-  }, []);
+  }, [isRunning, timeLeft, totalSeconds]);
 
   const pause = useCallback(() => {
-    setIsRunning(false);
+    if (!isRunning) return;
     clearTimer();
-  }, [clearTimer]);
+    if (endTimeRef.current) {
+      const remaining = Math.max(0, Math.ceil((endTimeRef.current - Date.now()) / 1000));
+      setTimeLeft(remaining);
+    }
+    endTimeRef.current = null;
+    setIsRunning(false);
+  }, [isRunning, clearTimer]);
 
   const reset = useCallback(() => {
     clearTimer();
+    endTimeRef.current = null;
     setTimeLeft(totalSeconds);
     setIsRunning(false);
   }, [totalSeconds, clearTimer]);
@@ -57,18 +70,31 @@ export function useTimer(
       return;
     }
 
-    intervalRef.current = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearTimer();
-          setIsRunning(false);
-          // Use setTimeout to avoid calling onExpire during render
-          setTimeout(() => onExpireRef.current(), 0);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    if (!endTimeRef.current) {
+      endTimeRef.current = Date.now() + timeLeft * 1000;
+    }
+
+    const updateTimer = () => {
+      if (!endTimeRef.current) return;
+      const now = Date.now();
+      const remainingSeconds = Math.max(0, Math.ceil((endTimeRef.current - now) / 1000));
+
+      setTimeLeft(remainingSeconds);
+
+      if (remainingSeconds <= 0) {
+        clearTimer();
+        endTimeRef.current = null;
+        setIsRunning(false);
+        setTimeout(() => {
+          onExpireRef.current();
+        }, 0);
+      }
+    };
+
+    // Immediate check on start/resume
+    updateTimer();
+
+    timerRef.current = setInterval(updateTimer, 500);
 
     return clearTimer;
   }, [isRunning, clearTimer]);
@@ -80,3 +106,4 @@ export function useTimer(
 
   return { timeLeft, isRunning, start, pause, reset };
 }
+

@@ -20,9 +20,13 @@ export default function QuestionCard({
   onSelectAnswer,
   isReview = false,
 }: QuestionCardProps) {
-  const optionLabels = ["A", "B", "C", "D"];
-  const correctAnswer = "correctAnswer" in question ? (question as ServerQuestion).correctAnswer : undefined;
-  const explanation = "explanation" in question ? (question as ServerQuestion).explanation : undefined;
+  const optionLabelsArray = ["A", "B", "C", "D"];
+  const correctAnswerIndex =
+    question && "correctAnswer" in question ? (question as ServerQuestion).correctAnswer : undefined;
+  const questionExplanation =
+    question && "explanation" in question ? (question as ServerQuestion).explanation : undefined;
+
+  const safeOptions = question && Array.isArray(question.options) ? question.options : [];
 
   return (
     <div className="animate-fade-in">
@@ -43,11 +47,11 @@ export default function QuestionCard({
 
       {/* Options */}
       <div className="space-y-3">
-        {question.options.map((option, idx) => {
+        {safeOptions.map((option, idx) => {
           const isUnanswered = selectedAnswer === null || selectedAnswer === undefined;
           const isSelected = selectedAnswer === idx;
-          const isCorrect = isReview && !isUnanswered && correctAnswer !== undefined && idx === correctAnswer;
-          const isWrong = isReview && isSelected && correctAnswer !== undefined && idx !== correctAnswer;
+          const isCorrect = isReview && !isUnanswered && correctAnswerIndex !== undefined && idx === correctAnswerIndex;
+          const isWrong = isReview && isSelected && correctAnswerIndex !== undefined && idx !== correctAnswerIndex;
 
           return (
             <button
@@ -76,7 +80,7 @@ export default function QuestionCard({
                         : "bg-navy-700 text-foreground/60"
                 )}
               >
-                {optionLabels[idx]}
+                {optionLabelsArray[idx] || String.fromCharCode(65 + idx)}
               </span>
 
               {/* Option Text */}
@@ -124,11 +128,11 @@ export default function QuestionCard({
       </div>
 
       {/* Explanation (review mode) */}
-      {isReview && explanation && (
+      {isReview && questionExplanation && (
         <div className="mt-6 p-4 rounded-xl bg-info/10 border border-info/20">
           <p className="text-sm text-blue-300">
             <span className="font-semibold">Explanation:</span>{" "}
-            {explanation}
+            {questionExplanation}
           </p>
         </div>
       )}
