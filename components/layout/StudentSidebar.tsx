@@ -20,13 +20,18 @@ export default function StudentSidebar({
   const handleLogout = () => {
     try {
       if (typeof window !== "undefined") {
+        localStorage.removeItem("candidateName");
+        localStorage.removeItem("candidateEmail");
+        localStorage.removeItem("authToken");
         sessionStorage.removeItem("candidateName");
         sessionStorage.removeItem("candidateEmail");
+        sessionStorage.removeItem("authToken");
+        sessionStorage.clear();
       }
-      router.push("/");
+      window.location.href = "/";
     } catch (error) {
       console.error("Error logging out in StudentSidebar:", error);
-      router.push("/");
+      window.location.href = "/";
     }
   };
 
