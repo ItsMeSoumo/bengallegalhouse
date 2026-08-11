@@ -12,6 +12,29 @@ interface AdminStudentUsersProps {
   onDeleteStudentUser: (user: StudentUserRecord) => void;
 }
 
+function formatJoinedDate(rawDate?: any): string {
+  if (!rawDate) return "N/A";
+  try {
+    let d: Date | null = null;
+    if (typeof rawDate.toDate === "function") {
+      d = rawDate.toDate();
+    } else if (typeof rawDate.seconds === "number") {
+      d = new Date(rawDate.seconds * 1000);
+    } else {
+      const parsed = new Date(rawDate);
+      if (!isNaN(parsed.getTime())) d = parsed;
+    }
+    if (!d) return "N/A";
+    return d.toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return "N/A";
+  }
+}
+
 export default function AdminStudentUsers({
   studentUsers,
   loadingStudents,
@@ -102,8 +125,8 @@ export default function AdminStudentUsers({
                       <td className="px-6 py-4 text-foreground/40">{globalIdx}</td>
                       <td className="px-6 py-4 font-medium text-white whitespace-nowrap">{user.name}</td>
                       <td className="px-6 py-4 text-gold-400 font-mono text-xs whitespace-nowrap">{user.email}</td>
-                      <td className="px-6 py-4 text-center text-foreground/40 text-xs">
-                        {user.createdAt ? new Date(user.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "N/A"}
+                      <td className="px-6 py-4 text-center text-foreground/40 text-xs font-medium">
+                        {formatJoinedDate(user.createdAt)}
                       </td>
                       <td className="px-6 py-4 text-center">
                         <button

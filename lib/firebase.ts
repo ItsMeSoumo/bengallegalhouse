@@ -250,11 +250,23 @@ export async function getAllStudentUsers(): Promise<StudentUserRecord[]> {
     const snapshot = await getDocs(collection(db, USERS_COLLECTION));
     return snapshot.docs.map((d) => {
       const data = d.data();
+      let createdAtIso: string | null = null;
+
+      if (data.createdAt) {
+        if (typeof data.createdAt.toDate === "function") {
+          createdAtIso = data.createdAt.toDate().toISOString();
+        } else if (typeof data.createdAt.seconds === "number") {
+          createdAtIso = new Date(data.createdAt.seconds * 1000).toISOString();
+        } else if (typeof data.createdAt === "string" || typeof data.createdAt === "number") {
+          createdAtIso = new Date(data.createdAt).toISOString();
+        }
+      }
+
       return {
         id: d.id,
         name: data.name || data.email || "Student Candidate",
         email: data.email || "",
-        createdAt: data.createdAt,
+        createdAt: createdAtIso,
       };
     });
   } catch (err) {
