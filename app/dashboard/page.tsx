@@ -52,12 +52,18 @@ export default function StudentDashboard() {
   // Authentication Protection Check
   useEffect(() => {
     setIsClient(true);
-    const name = sessionStorage.getItem("candidateName") || "";
-    const email = sessionStorage.getItem("candidateEmail") || "";
+    let name = localStorage.getItem("candidateName") || sessionStorage.getItem("candidateName") || "";
+    let email = localStorage.getItem("candidateEmail") || sessionStorage.getItem("candidateEmail") || "";
+
     if (!name) {
       router.push("/");
       return;
     }
+
+    // Sync to sessionStorage so all downstream legacy reads work seamlessly
+    sessionStorage.setItem("candidateName", name);
+    sessionStorage.setItem("candidateEmail", email);
+
     setStudentName(name);
     setStudentEmail(email);
     setExamPapers(getExamPapers());

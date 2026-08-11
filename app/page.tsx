@@ -13,6 +13,7 @@ import {
 
 export default function Home() {
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const [checkingSession, setCheckingSession] = useState(true);
 
   // Form Fields
   const [fullName, setFullName] = useState("");
@@ -24,11 +25,30 @@ export default function Home() {
 
   const router = useRouter();
 
+  // Helper to save student session persistently
+  const setStudentSession = (name: string, email: string, token?: string) => {
+    localStorage.setItem("candidateName", name);
+    localStorage.setItem("candidateEmail", email);
+    sessionStorage.setItem("candidateName", name);
+    sessionStorage.setItem("candidateEmail", email);
+    if (token) {
+      localStorage.setItem("authToken", token);
+      sessionStorage.setItem("authToken", token);
+    }
+  };
+
   // Redirect if session is already active
   useEffect(() => {
-    const existingName = sessionStorage.getItem("candidateName");
+    const existingName =
+      localStorage.getItem("candidateName") || sessionStorage.getItem("candidateName");
+    const existingEmail =
+      localStorage.getItem("candidateEmail") || sessionStorage.getItem("candidateEmail");
     if (existingName) {
-      router.push("/dashboard");
+      sessionStorage.setItem("candidateName", existingName);
+      if (existingEmail) sessionStorage.setItem("candidateEmail", existingEmail);
+      router.replace("/dashboard");
+    } else {
+      setCheckingSession(false);
     }
   }, [router]);
 
@@ -70,9 +90,8 @@ export default function Home() {
           return;
         }
 
-        // Save Student Session
-        sessionStorage.setItem("candidateName", res.user!.name);
-        sessionStorage.setItem("candidateEmail", res.user!.email);
+        // Save Student Session persistently
+        setStudentSession(res.user!.name, res.user!.email);
         router.push("/dashboard");
       } else {
         // ── LOG IN VERIFICATION ──────────────────────────────────────────────
@@ -96,8 +115,7 @@ export default function Home() {
         }
 
         // Log In Successful
-        sessionStorage.setItem("candidateName", res.user!.name);
-        sessionStorage.setItem("candidateEmail", res.user!.email);
+        setStudentSession(res.user!.name, res.user!.email);
         router.push("/dashboard");
       }
     } catch {
@@ -114,15 +132,13 @@ export default function Home() {
     try {
       const googleUser = await loginWithGoogle();
       if (googleUser.email) {
-        // Auto-register user if new
-        await registerStudentUserInDB(googleUser.name, googleUser.email, "google_oauth_user");
+        // Auto-register user asynchronously (non-blocking so failure doesn't stop login)
+        registerStudentUserInDB(googleUser.name, googleUser.email, "google_oauth_user").catch((err) =>
+          console.warn("Google auto-registration notice:", err)
+        );
       }
 
-      sessionStorage.setItem("candidateName", googleUser.name);
-      sessionStorage.setItem("candidateEmail", googleUser.email);
-      if (googleUser.token) {
-        sessionStorage.setItem("authToken", googleUser.token);
-      }
+      setStudentSession(googleUser.name, googleUser.email, googleUser.token);
       router.push("/dashboard");
     } catch (err: unknown) {
       const errObj = err as { message?: string };
@@ -134,6 +150,14 @@ export default function Home() {
       setIsSubmitting(false);
     }
   };
+
+  if (checkingSession) {
+    return (
+      <div className="flex flex-col flex-1 items-center justify-center min-h-screen bg-navy-950">
+        <Spinner size="lg" label="Checking session..." />
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col flex-1 items-center justify-center min-h-screen px-4 py-8 bg-navy-950">
