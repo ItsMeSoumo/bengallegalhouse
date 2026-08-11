@@ -131,13 +131,6 @@ export default function Home() {
     setIsSubmitting(true);
     try {
       const googleUser = await loginWithGoogle();
-      if (googleUser.email) {
-        // Auto-register user asynchronously (non-blocking so failure doesn't stop login)
-        registerStudentUserInDB(googleUser.name, googleUser.email, "google_oauth_user").catch((err) =>
-          console.warn("Google auto-registration notice:", err)
-        );
-      }
-
       setStudentSession(googleUser.name, googleUser.email, googleUser.token);
       router.push("/dashboard");
     } catch (err: unknown) {

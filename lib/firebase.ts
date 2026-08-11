@@ -102,11 +102,22 @@ export async function registerStudentUserInDB(
   password: string
 ): Promise<StudentAuthResult> {
   const cleanEmail = email.trim().toLowerCase();
+  if (!cleanEmail) {
+    return { success: false, error: "Valid email is required" };
+  }
+
+  // Deterministic document ID derived from email to guarantee zero duplicate documents
+  const docId = cleanEmail.replace(/[^a-z0-9]/gi, "_");
+
   console.log(`\n📝 [DB WRITE: signup] Attempting to register user:
       - Name: ${name}
-      - Email: ${cleanEmail}`);
+      - Email: ${cleanEmail}
+      - Doc ID: ${docId}`);
+
   try {
-    // Check if user already exists with this email ID
+    const userDocRef = doc(db, USERS_COLLECTION, docId);
+
+    // Check if user already exists in collection
     const q = query(
       collection(db, USERS_COLLECTION),
       where("email", "==", cleanEmail)
@@ -122,15 +133,19 @@ export async function registerStudentUserInDB(
       };
     }
 
-    // Save student user document in student_users collection
-    console.log(`📝 [DB WRITE: signup] Adding new user document to '${USERS_COLLECTION}'...`);
-    const newDoc = await addDoc(collection(db, USERS_COLLECTION), {
-      name: name.trim(),
-      email: cleanEmail,
-      password: password,
-      createdAt: Timestamp.now(),
-    });
-    console.log(`📝 [DB WRITE: signup] Successfully registered new user. Firestore Doc ID: ${newDoc.id}`);
+    // Save student user document deterministically using setDoc with merge
+    console.log(`📝 [DB WRITE: signup] Setting user document '${docId}' in '${USERS_COLLECTION}'...`);
+    await setDoc(
+      userDocRef,
+      {
+        name: name.trim(),
+        email: cleanEmail,
+        password: password,
+        createdAt: Timestamp.now(),
+      },
+      { merge: true }
+    );
+    console.log(`📝 [DB WRITE: signup] Successfully registered new user. Firestore Doc ID: ${docId}`);
 
     return {
       success: true,
