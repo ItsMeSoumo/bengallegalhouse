@@ -153,8 +153,9 @@ export default function ExamPage() {
 
   // Initialize exam on mount — fetch questions from DB via secure server API
   useEffect(() => {
-    const name = sessionStorage.getItem("candidateName");
-    const email = sessionStorage.getItem("candidateEmail") || "";
+    const name = localStorage.getItem("candidateName") || sessionStorage.getItem("candidateName");
+    const email =
+      localStorage.getItem("candidateEmail") || sessionStorage.getItem("candidateEmail") || "";
     if (!name) {
       router.push("/");
       return;

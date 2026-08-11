@@ -15,7 +15,8 @@ export default function ResultsPage() {
   useEffect(() => {
     try {
       const storedResult = sessionStorage.getItem("examResult");
-      const candidateName = sessionStorage.getItem("candidateName");
+      const candidateName =
+        localStorage.getItem("candidateName") || sessionStorage.getItem("candidateName");
 
       // If no active candidate session or result, redirect to home login
       if (!candidateName && !storedResult) {

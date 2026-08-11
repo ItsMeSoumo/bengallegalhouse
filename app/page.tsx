@@ -120,12 +120,15 @@ export default function Home() {
 
       sessionStorage.setItem("candidateName", googleUser.name);
       sessionStorage.setItem("candidateEmail", googleUser.email);
+      if (googleUser.token) {
+        sessionStorage.setItem("authToken", googleUser.token);
+      }
       router.push("/dashboard");
     } catch (err: unknown) {
       const errObj = err as { message?: string };
       setError(
         errObj?.message ||
-          "Google Sign-In needs to be enabled in Firebase Console (Authentication → Sign-in method → Google)."
+        "Google Sign-In needs to be enabled in Firebase Console (Authentication → Sign-in method → Google)."
       );
     } finally {
       setIsSubmitting(false);
@@ -170,11 +173,10 @@ export default function Home() {
                 setAuthMode("login");
                 setError("");
               }}
-              className={`flex-1 text-center py-2 text-sm font-semibold transition-all cursor-pointer ${
-                authMode === "login"
-                  ? "text-gold-400 border-b-2 border-gold-400 font-bold"
-                  : "text-foreground/40 hover:text-white"
-              }`}
+              className={`flex-1 text-center py-2 text-sm font-semibold transition-all cursor-pointer ${authMode === "login"
+                ? "text-gold-400 border-b-2 border-gold-400 font-bold"
+                : "text-foreground/40 hover:text-white"
+                }`}
             >
               Log In
             </button>
@@ -184,11 +186,10 @@ export default function Home() {
                 setAuthMode("signup");
                 setError("");
               }}
-              className={`flex-1 text-center py-2 text-sm font-semibold transition-all cursor-pointer ${
-                authMode === "signup"
-                  ? "text-gold-400 border-b-2 border-gold-400 font-bold"
-                  : "text-foreground/40 hover:text-white"
-              }`}
+              className={`flex-1 text-center py-2 text-sm font-semibold transition-all cursor-pointer ${authMode === "signup"
+                ? "text-gold-400 border-b-2 border-gold-400 font-bold"
+                : "text-foreground/40 hover:text-white"
+                }`}
             >
               Sign Up
             </button>

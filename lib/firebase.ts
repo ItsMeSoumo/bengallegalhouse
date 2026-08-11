@@ -36,24 +36,28 @@ const googleProvider = new GoogleAuthProvider();
 
 // ── Google Sign In Helper ───────────────────────────────────────────────────
 
-export async function loginWithGoogle(): Promise<{ name: string; email: string }> {
+export async function loginWithGoogle(): Promise<{ name: string; email: string; token: string }> {
   console.log("🔑 [GOOGLE AUTH] Initializing Google Sign-In popup...");
   try {
     const result = await signInWithPopup(auth, googleProvider);
     const user = result.user;
+    const token = await user.getIdToken();
     const studentInfo = {
       name: user.displayName || user.email || "Student Candidate",
       email: user.email || "",
+      token,
     };
-    console.log("🔑 [GOOGLE AUTH] Popup sign-in successful. User details:", studentInfo);
+    console.log("🔑 [GOOGLE AUTH] Popup sign-in successful. User details:", {
+      name: studentInfo.name,
+      email: studentInfo.email,
+      hasToken: !!studentInfo.token,
+    });
 
-    // Auto-register Google student user document in student_users collection
+    // Auto-register Google student user document asynchronously (non-blocking for fast redirect)
     if (studentInfo.email) {
-      try {
-        await registerStudentUserInDB(studentInfo.name, studentInfo.email, "google_oauth_user");
-      } catch (regErr) {
+      registerStudentUserInDB(studentInfo.name, studentInfo.email, "google_oauth_user").catch((regErr) => {
         console.warn("Google user auto-registration notice:", regErr);
-      }
+      });
     }
 
     return studentInfo;
@@ -67,7 +71,7 @@ export async function loginWithGoogle(): Promise<{ name: string; email: string }
     }
     if (errObj?.code === "auth/unauthorized-domain") {
       throw new Error(
-        "Domain not authorized in Firebase. Please add 'sohamcbt.vercel.app' in Firebase Console -> Authentication -> Settings -> Authorized Domains."
+        "Domain not authorized in Firebase. Please add your Vercel domain (e.g. oneplacecbt.vercel.app) in Firebase Console -> Authentication -> Settings -> Authorized Domains."
       );
     }
     throw error;

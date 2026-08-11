@@ -220,156 +220,155 @@ export default function StudentDashboard() {
                     const isLimitReached = maxAllowed > 0 && attemptsTaken >= maxAllowed;
                     const scheduleStatus = getScheduleStatus(paper);
 
-                  return (
-                    <Card key={paper.id} variant="highlight" className="p-6 space-y-6">
-                      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-navy-600/30 pb-4">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gold-500/20 text-gold-400 border border-gold-500/30">
-                              {paper.subtitle}
-                            </span>
-                            {maxAllowed > 0 && (
-                              <span
-                                className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${isLimitReached
-                                  ? "bg-danger/20 text-danger border border-danger/30"
-                                  : "bg-navy-800 text-purple-300 border border-purple-500/30"
-                                  }`}
-                              >
-                                Attempts: {attemptsTaken} / {maxAllowed}
+                    return (
+                      <Card key={paper.id} variant="highlight" className="p-6 space-y-6">
+                        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-navy-600/30 pb-4">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gold-500/20 text-gold-400 border border-gold-500/30">
+                                {paper.subtitle}
                               </span>
-                            )}
-                          </div>
-                          <h3 className="text-xl font-bold text-white mt-2">
-                            {paper.title}
-                          </h3>
-                          <p className="text-xs text-foreground/50 mt-1 max-w-2xl">
-                            {paper.description}
-                          </p>
-                        </div>
-
-                        {paper.status === "paused" ? (
-                          <span className="px-4 py-2 rounded-xl text-xs font-bold bg-warning/15 text-warning border border-warning/30">
-                            Paused by Admin
-                          </span>
-                        ) : isLimitReached ? (
-                          <div className="w-full md:w-auto px-5 py-3 rounded-xl text-xs md:text-sm font-bold bg-navy-900/90 text-gold-300 border border-gold-500/40 flex items-center justify-center gap-2 shadow-md cursor-not-allowed select-none">
-                            <svg
-                              className="w-4 h-4 text-gold-400"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                              strokeWidth={2.2}
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                              />
-                            </svg>
-                            <span>Attempt Limit Reached</span>
-                          </div>
-                        ) : scheduleStatus === "upcoming" ? (
-                          <div className="w-full md:w-auto px-5 py-3 rounded-xl text-xs md:text-sm font-bold bg-purple/10 text-purple-300 border border-purple/30 flex items-center justify-center gap-2 shadow-md cursor-not-allowed select-none">
-                            <span className="text-base">🕐</span>
-                            <span>Opens at {formatTime12h(paper.scheduledStartTime)} IST</span>
-                          </div>
-                        ) : scheduleStatus === "closed" ? (
-                          <div className="w-full md:w-auto px-5 py-3 rounded-xl text-xs md:text-sm font-bold bg-danger/10 text-danger border border-danger/30 flex items-center justify-center gap-2 shadow-md cursor-not-allowed select-none">
-                            <span className="text-base">🔒</span>
-                            <span>Exam Window Closed</span>
-                          </div>
-                        ) : (
-                          <Button
-                            size="lg"
-                            onClick={() => handleStartExamClick(paper)}
-                            className="w-full md:w-auto"
-                          >
-                            Start Examination
-                          </Button>
-                        )}
-                      </div>
-
-                      {/* Specs */}
-                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-center">
-                        <div className="glass-card-light p-3 rounded-xl">
-                          <p className="text-xs text-foreground/40">Questions</p>
-                          <p className="text-lg font-bold text-gold-400">
-                            {paper.questions.length}
-                          </p>
-                        </div>
-                        <div className="glass-card-light p-3 rounded-xl">
-                          <p className="text-xs text-foreground/40">Timer Duration</p>
-                          <p className="text-lg font-bold text-gold-400">
-                            {paper.totalTimeMinutes} Mins
-                          </p>
-                        </div>
-                        <div className="glass-card-light p-3 rounded-xl">
-                          <p className="text-xs text-foreground/40">Marking Scheme</p>
-                          <p className="text-lg font-bold">
-                            <span className="text-success">+{paper.marksPerCorrect}</span>
-                            <span className="text-foreground/40 mx-1">/</span>
-                            <span className="text-danger">-{paper.negativeMarks}</span>
-                          </p>
-                        </div>
-                        <div className="glass-card-light p-3 rounded-xl">
-                          <p className="text-xs text-foreground/40">Max Attempts</p>
-                          <p className="text-lg font-bold text-purple-400">
-                            {maxAllowed === 0 ? "Unlimited" : `${maxAllowed} ${maxAllowed === 1 ? "Time" : "Times"}`}
-                          </p>
-                        </div>
-                        <div className="glass-card-light p-3 rounded-xl">
-                          <p className="text-xs text-foreground/40">My Attempts</p>
-                          <p className={`text-lg font-bold ${isLimitReached ? "text-danger" : "text-white"}`}>
-                            {attemptsTaken} {maxAllowed > 0 ? `/ ${maxAllowed}` : ""}
-                          </p>
-                        </div>
-
-                      {/* Schedule info row */}
-                      {paper.scheduledDate && paper.scheduledStartTime && paper.scheduledEndTime && (
-                        <div className={`col-span-full glass-card-light p-3 rounded-xl flex items-center justify-between gap-2 text-xs font-semibold ${
-                          scheduleStatus === "live" ? "text-success border border-success/20" :
-                          scheduleStatus === "upcoming" ? "text-purple-300 border border-purple/20" :
-                          "text-danger border border-danger/20"
-                        }`}>
-                          <div className="flex items-center gap-2">
-                            <span>{scheduleStatus === "live" ? "🟢" : scheduleStatus === "upcoming" ? "🕐" : "🔒"}</span>
-                            <span>
-                              {scheduleStatus === "live" ? "LIVE NOW" : scheduleStatus === "upcoming" ? "Upcoming" : "Closed"}
-                              {" — "}
-                              {new Date(paper.scheduledDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
-                              {", "}{formatTime12h(paper.scheduledStartTime)} – {formatTime12h(paper.scheduledEndTime)} IST
-                            </span>
-                          </div>
-
-                          {/* Calculated window duration */}
-                          {(() => {
-                            const [sh, sm] = paper.scheduledStartTime.split(":").map(Number);
-                            const [eh, em] = paper.scheduledEndTime.split(":").map(Number);
-                            if (!isNaN(sh) && !isNaN(sm) && !isNaN(eh) && !isNaN(em)) {
-                              const sMins = sh * 60 + sm;
-                              let eMins = eh * 60 + em;
-                              if (eMins <= sMins) eMins += 1440;
-                              const diff = eMins - sMins;
-                              const hrs = Math.floor(diff / 60);
-                              const m = diff % 60;
-                              const durationStr = hrs > 0 && m > 0 ? `${hrs}h ${m}m` : hrs > 0 ? `${hrs} Hour${hrs > 1 ? "s" : ""}` : `${m} Mins`;
-                              return (
-                                <span className="px-2.5 py-0.5 rounded-full bg-navy-900/80 text-foreground/70 border border-white/10 text-[11px] font-bold shrink-0">
-                                  ⏱️ {durationStr} Window
+                              {maxAllowed > 0 && (
+                                <span
+                                  className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${isLimitReached
+                                    ? "bg-danger/20 text-danger border border-danger/30"
+                                    : "bg-navy-800 text-purple-300 border border-purple-500/30"
+                                    }`}
+                                >
+                                  Attempts: {attemptsTaken} / {maxAllowed}
                                 </span>
-                              );
-                            }
-                            return null;
-                          })()}
+                              )}
+                            </div>
+                            <h3 className="text-xl font-bold text-white mt-2">
+                              {paper.title}
+                            </h3>
+                            <p className="text-xs text-foreground/50 mt-1 max-w-2xl">
+                              {paper.description}
+                            </p>
+                          </div>
+
+                          {paper.status === "paused" ? (
+                            <span className="px-4 py-2 rounded-xl text-xs font-bold bg-warning/15 text-warning border border-warning/30">
+                              Paused by Admin
+                            </span>
+                          ) : isLimitReached ? (
+                            <div className="w-full md:w-auto px-5 py-3 rounded-xl text-xs md:text-sm font-bold bg-navy-900/90 text-gold-300 border border-gold-500/40 flex items-center justify-center gap-2 shadow-md cursor-not-allowed select-none">
+                              <svg
+                                className="w-4 h-4 text-gold-400"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke="currentColor"
+                                strokeWidth={2.2}
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                                />
+                              </svg>
+                              <span>Attempt Limit Reached</span>
+                            </div>
+                          ) : scheduleStatus === "upcoming" ? (
+                            <div className="w-full md:w-auto px-5 py-3 rounded-xl text-xs md:text-sm font-bold bg-purple/10 text-purple-300 border border-purple/30 flex items-center justify-center gap-2 shadow-md cursor-not-allowed select-none">
+                              <span className="text-base">🕐</span>
+                              <span>Opens at {formatTime12h(paper.scheduledStartTime)} IST</span>
+                            </div>
+                          ) : scheduleStatus === "closed" ? (
+                            <div className="w-full md:w-auto px-5 py-3 rounded-xl text-xs md:text-sm font-bold bg-danger/10 text-danger border border-danger/30 flex items-center justify-center gap-2 shadow-md cursor-not-allowed select-none">
+                              <span className="text-base">🔒</span>
+                              <span>Exam Window Closed</span>
+                            </div>
+                          ) : (
+                            <Button
+                              size="lg"
+                              onClick={() => handleStartExamClick(paper)}
+                              className="w-full md:w-auto"
+                            >
+                              Start Examination
+                            </Button>
+                          )}
                         </div>
-                      )}
-                    </div>
-                    </Card>
-                  );
-                })}
-              </div>
-            );
-          })()}
+
+                        {/* Specs */}
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-center">
+                          <div className="glass-card-light p-3 rounded-xl">
+                            <p className="text-xs text-foreground/40">Questions</p>
+                            <p className="text-lg font-bold text-gold-400">
+                              {paper.questions.length}
+                            </p>
+                          </div>
+                          <div className="glass-card-light p-3 rounded-xl">
+                            <p className="text-xs text-foreground/40">Timer Duration</p>
+                            <p className="text-lg font-bold text-gold-400">
+                              {paper.totalTimeMinutes} Mins
+                            </p>
+                          </div>
+                          <div className="glass-card-light p-3 rounded-xl">
+                            <p className="text-xs text-foreground/40">Marking Scheme</p>
+                            <p className="text-lg font-bold">
+                              <span className="text-success">+{paper.marksPerCorrect}</span>
+                              <span className="text-foreground/40 mx-1">/</span>
+                              <span className="text-danger">-{paper.negativeMarks}</span>
+                            </p>
+                          </div>
+                          <div className="glass-card-light p-3 rounded-xl">
+                            <p className="text-xs text-foreground/40">Max Attempts</p>
+                            <p className="text-lg font-bold text-purple-400">
+                              {maxAllowed === 0 ? "Unlimited" : `${maxAllowed} ${maxAllowed === 1 ? "Time" : "Times"}`}
+                            </p>
+                          </div>
+                          <div className="glass-card-light p-3 rounded-xl">
+                            <p className="text-xs text-foreground/40">My Attempts</p>
+                            <p className={`text-lg font-bold ${isLimitReached ? "text-danger" : "text-white"}`}>
+                              {attemptsTaken} {maxAllowed > 0 ? `/ ${maxAllowed}` : ""}
+                            </p>
+                          </div>
+
+                          {/* Schedule info row */}
+                          {paper.scheduledDate && paper.scheduledStartTime && paper.scheduledEndTime && (
+                            <div className={`col-span-full glass-card-light p-3 rounded-xl flex items-center justify-between gap-2 text-xs font-semibold ${scheduleStatus === "live" ? "text-success border border-success/20" :
+                                scheduleStatus === "upcoming" ? "text-purple-300 border border-purple/20" :
+                                  "text-danger border border-danger/20"
+                              }`}>
+                              <div className="flex items-center gap-2">
+                                <span>{scheduleStatus === "live" ? "🟢" : scheduleStatus === "upcoming" ? "🕐" : "🔒"}</span>
+                                <span>
+                                  {scheduleStatus === "live" ? "LIVE NOW" : scheduleStatus === "upcoming" ? "Upcoming" : "Closed"}
+                                  {" — "}
+                                  {new Date(paper.scheduledDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                                  {", "}{formatTime12h(paper.scheduledStartTime)} – {formatTime12h(paper.scheduledEndTime)} IST
+                                </span>
+                              </div>
+
+                              {/* Calculated window duration */}
+                              {(() => {
+                                const [sh, sm] = paper.scheduledStartTime.split(":").map(Number);
+                                const [eh, em] = paper.scheduledEndTime.split(":").map(Number);
+                                if (!isNaN(sh) && !isNaN(sm) && !isNaN(eh) && !isNaN(em)) {
+                                  const sMins = sh * 60 + sm;
+                                  let eMins = eh * 60 + em;
+                                  if (eMins <= sMins) eMins += 1440;
+                                  const diff = eMins - sMins;
+                                  const hrs = Math.floor(diff / 60);
+                                  const m = diff % 60;
+                                  const durationStr = hrs > 0 && m > 0 ? `${hrs}h ${m}m` : hrs > 0 ? `${hrs} Hour${hrs > 1 ? "s" : ""}` : `${m} Mins`;
+                                  return (
+                                    <span className="px-2.5 py-0.5 rounded-full bg-navy-900/80 text-foreground/70 border border-white/10 text-[11px] font-bold shrink-0">
+                                      ⏱️ {durationStr} Window
+                                    </span>
+                                  );
+                                }
+                                return null;
+                              })()}
+                            </div>
+                          )}
+                        </div>
+                      </Card>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
         )}
 
