@@ -1,37 +1,7 @@
 import { NextResponse } from "next/server";
-import { getApps, initializeApp } from "firebase/app";
-import { getFirestore, doc, getDoc, getDocs, collection } from "firebase/firestore";
-import { ExamResult, ExamPaper } from "@/lib/types";
+import { ExamResult } from "@/lib/types";
 import { saveExamResult, getCandidateExamResults } from "@/lib/firebase";
-
-const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-};
-
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-const db = getFirestore(app);
-
-// Fetch exam paper with full questions (including correctAnswer) — server-side only
-async function getExamPaperFromDB(examId: string): Promise<ExamPaper | null> {
-  try {
-    const docSnap = await getDoc(doc(db, "exam_papers", examId));
-    if (docSnap.exists()) {
-      return docSnap.data() as ExamPaper;
-    }
-    // Fallback: scan collection
-    const allSnap = await getDocs(collection(db, "exam_papers"));
-    const found = allSnap.docs.find((d) => d.id === examId || d.data().id === examId);
-    return found ? (found.data() as ExamPaper) : null;
-  } catch (err) {
-    console.error("Error fetching exam paper from DB:", err);
-    return null;
-  }
-}
+import { resolveExamPaper } from "@/lib/paperResolver";
 
 export async function POST(request: Request) {
   try {
@@ -58,9 +28,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // Fetch exam paper from Firestore DB
+    // Resolve paper securely with canonical validation & shared paper definition
     console.log(`🔍 [DB READ: submit] Loading master exam sheet for ID: '${examId}'`);
-    const examPaper = examId ? await getExamPaperFromDB(examId) : null;
+    const examPaper = examId ? await resolveExamPaper(examId) : null;
 
     if (!examPaper || !examPaper.questions || examPaper.questions.length === 0) {
       console.warn(`⚠️ [API POST: /api/exam/submit] Exam paper '${examId}' not found or has no questions configured!`);
@@ -72,7 +42,7 @@ export async function POST(request: Request) {
 
     console.log(`🔍 [DB READ: submit] Loaded exam '${examPaper.title}' with ${examPaper.questions.length} total questions.`);
 
-    // ── Server-Side Attempt Limit Enforcement ──
+    // ── Server-Side Attempt Limit Enforcement (Dynamic from Firestore) ──
     if (examPaper.maxAttempts && examPaper.maxAttempts > 0) {
       try {
         console.log(`🔍 [DB READ: submit check] Verifying attempt limits for candidate. Max allowed: ${examPaper.maxAttempts}`);
@@ -81,7 +51,6 @@ export async function POST(request: Request) {
           (r) => r.examId === examPaper.id
         ).length;
 
-        console.log(`🔍 [DB READ: submit check] Student has already attempted this exam ${existingAttempts} times.`);
         if (existingAttempts >= examPaper.maxAttempts) {
           console.warn(`⛔ [API POST: /api/exam/submit] Rejecting submission! Attempt limit (${examPaper.maxAttempts}) reached.`);
           return NextResponse.json(

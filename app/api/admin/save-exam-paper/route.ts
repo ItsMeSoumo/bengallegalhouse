@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { ExamPaper } from "@/lib/types";
+import { invalidatePaperCache } from "@/lib/paperResolver";
 
 export async function POST(request: Request) {
   try {
@@ -7,6 +8,7 @@ export async function POST(request: Request) {
     const { action, paper, paperId } = body;
 
     if (action === "delete" && paperId) {
+      invalidatePaperCache(paperId);
       console.log(`\n==================================================`);
       console.log(`🗑️ [SERVER TERMINAL LOG] Admin Deleted Exam Paper:`);
       console.log(`📌 Paper ID: ${paperId}`);
@@ -20,6 +22,7 @@ export async function POST(request: Request) {
     }
 
     const typedPaper = paper as ExamPaper;
+    invalidatePaperCache(typedPaper.id);
 
     console.log(`\n==================================================`);
     console.log(`💾 [SERVER TERMINAL LOG] Admin Saved Exam Paper Settings:`);
