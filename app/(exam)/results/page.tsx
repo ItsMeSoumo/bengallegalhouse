@@ -11,9 +11,17 @@ import { EXAM_INFO } from "@/lib/constants";
 export default function ResultsPage() {
   const router = useRouter();
   const [result, setResult] = useState<ExamResult | null>(null);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const [loadTimedOut, setLoadTimedOut] = useState(false);
 
   useEffect(() => {
     try {
+      const storedError = sessionStorage.getItem("submissionError");
+      if (storedError) {
+        setSubmissionError(storedError);
+        return;
+      }
+
       const storedResult = sessionStorage.getItem("examResult");
       const candidateName =
         localStorage.getItem("candidateName") || sessionStorage.getItem("candidateName");
@@ -26,15 +34,19 @@ export default function ResultsPage() {
 
       if (storedResult) {
         setResult(JSON.parse(storedResult));
+      } else {
+        const timer = setTimeout(() => setLoadTimedOut(true), 2000);
+        return () => clearTimeout(timer);
       }
     } catch (error) {
       console.error("Error parsing stored exam result:", error);
-      router.push("/");
+      router.push("/dashboard");
     }
   }, [router]);
 
   const handleReturnToDashboard = () => {
     sessionStorage.removeItem("examResult");
+    sessionStorage.removeItem("submissionError");
     sessionStorage.removeItem("activeExamId");
     sessionStorage.removeItem("activeExamTitle");
     sessionStorage.removeItem("activeExamTime");
@@ -42,7 +54,51 @@ export default function ResultsPage() {
     router.push("/dashboard");
   };
 
+  if (submissionError) {
+    const isAttemptLimit = submissionError.toLowerCase().includes("attempt");
+
+    return (
+      <div className="flex flex-1 items-center justify-center min-h-screen bg-navy-950 p-4">
+        <Card variant="highlight" className="p-8 max-w-md w-full text-center space-y-5 border border-danger/40 animate-scale-in">
+          <div className="w-14 h-14 rounded-full bg-danger/15 text-danger border border-danger/30 flex items-center justify-center mx-auto text-2xl">
+            {isAttemptLimit ? "⚠️" : "❌"}
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-bold text-white">
+              {isAttemptLimit ? "Attempt Limit Reached" : "Submission Error"}
+            </h2>
+            <p className="text-xs text-foreground/60 leading-relaxed">
+              {submissionError}
+            </p>
+          </div>
+          <Button variant="primary" className="w-full font-bold pt-2" onClick={handleReturnToDashboard}>
+            Return to Student Dashboard →
+          </Button>
+        </Card>
+      </div>
+    );
+  }
+
   if (!result) {
+    if (loadTimedOut) {
+      return (
+        <div className="flex flex-1 items-center justify-center min-h-screen bg-navy-950 p-4">
+          <Card variant="highlight" className="p-8 max-w-md w-full text-center space-y-4 animate-scale-in">
+            <div className="w-12 h-12 rounded-full bg-gold-500/20 text-gold-400 flex items-center justify-center mx-auto text-xl">
+              📋
+            </div>
+            <h2 className="text-xl font-bold text-white">Submission Recorded</h2>
+            <p className="text-xs text-foreground/60 leading-relaxed">
+              Your exam paper has been safely saved in the database. You can view your detailed scorecard anytime in your student dashboard.
+            </p>
+            <Button variant="primary" className="w-full font-bold" onClick={handleReturnToDashboard}>
+              Return to Student Dashboard →
+            </Button>
+          </Card>
+        </div>
+      );
+    }
+
     return (
       <div className="flex flex-1 items-center justify-center min-h-screen bg-navy-950">
         <Spinner size="xl" label="Loading submission confirmation..." />

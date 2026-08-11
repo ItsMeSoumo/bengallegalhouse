@@ -6,6 +6,7 @@ import ExamHeader from "@/components/exam/ExamHeader";
 import QuestionCard from "@/components/exam/QuestionCard";
 import QuestionPalette from "@/components/exam/QuestionPalette";
 import Button from "@/components/ui/Button";
+import Card from "@/components/ui/Card";
 import Spinner from "@/components/ui/Spinner";
 import { useTimer } from "@/hooks/useTimer";
 import { useExam } from "@/hooks/useExam";
@@ -61,20 +62,31 @@ export default function ExamPage() {
         }),
       });
 
-      // Clear active exam session from localStorage upon submission
       const candidateEmail = sessionStorage.getItem("candidateEmail") || currentState.candidateName;
       const sKey = `soham_cbt_session_${activeExamId}_${candidateEmail.toLowerCase().trim()}`;
-      localStorage.removeItem(sKey);
 
       const data = await response.json();
-      if (data.success) {
+      if (response.ok && data.success && data.result) {
+        localStorage.removeItem(sKey);
+        sessionStorage.removeItem("submissionError");
         sessionStorage.setItem("examResult", JSON.stringify(data.result));
       } else {
         console.error("Submission error:", data.error);
+        sessionStorage.removeItem("examResult");
+        sessionStorage.setItem(
+          "submissionError",
+          data.error || "Attempt limit reached or server rejected submission."
+        );
       }
       router.push("/results");
-    } catch (err) {
+    } catch (err: unknown) {
+      const errObj = err as { message?: string };
       console.error("Failed to submit exam:", err);
+      sessionStorage.removeItem("examResult");
+      sessionStorage.setItem(
+        "submissionError",
+        errObj?.message || "Network error while submitting exam answers."
+      );
       router.push("/results");
     }
   }, [router, isSubmitting]);
@@ -340,6 +352,35 @@ export default function ExamPage() {
   }, [exam.state, examQuestions.length, candidateName, isInitializing, examTimeSec]);
 
   const answeredCount = exam.state.answers.filter((a) => a !== null).length;
+
+  if (limitReachedModal) {
+    return (
+      <div className="flex flex-1 items-center justify-center min-h-screen bg-navy-950 p-4">
+        <Card variant="highlight" className="p-8 max-w-md w-full text-center space-y-5 border border-danger/40 animate-scale-in">
+          <div className="w-14 h-14 rounded-full bg-danger/15 text-danger border border-danger/30 flex items-center justify-center mx-auto text-2xl font-bold">
+            ⚠️
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-xl font-bold text-white">Attempt Limit Reached</h2>
+            <p className="text-xs text-foreground/60 leading-relaxed">
+              You have already completed the maximum allowed{" "}
+              <span className="font-bold text-gold-400">
+                {limitReachedModal.maxAttempts} attempt(s)
+              </span>{" "}
+              for <span className="font-semibold text-white">&quot;{limitReachedModal.title}&quot;</span>. Multiple attempts are locked for this examination.
+            </p>
+          </div>
+          <Button
+            variant="primary"
+            className="w-full font-bold pt-2"
+            onClick={() => router.push("/dashboard")}
+          >
+            Return to Student Dashboard →
+          </Button>
+        </Card>
+      </div>
+    );
+  }
 
   if (isInitializing || !candidateName) {
     return (
@@ -674,34 +715,6 @@ export default function ExamPage() {
         </div>
       )}
 
-      {/* ── ATTEMPT LIMIT REACHED MODAL ── */}
-      {limitReachedModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="modal-overlay absolute inset-0 bg-navy-950/80 backdrop-blur-md" />
-          <div className="relative glass-card p-6 md:p-8 max-w-md w-full animate-scale-in text-center space-y-5 border border-danger/40">
-            <div className="w-14 h-14 rounded-full bg-danger/15 text-danger border border-danger/30 flex items-center justify-center mx-auto text-2xl font-bold">
-              ⚠️
-            </div>
-            <div className="space-y-2">
-              <h3 className="text-xl font-bold text-white">Attempt Limit Reached</h3>
-              <p className="text-xs text-foreground/60 leading-relaxed">
-                You have already completed the maximum allowed{" "}
-                <span className="font-bold text-gold-400">
-                  {limitReachedModal.maxAttempts} attempt(s)
-                </span>{" "}
-                for <span className="font-semibold text-white">&quot;{limitReachedModal.title}&quot;</span>.
-              </p>
-            </div>
-            <Button
-              variant="secondary"
-              className="w-full font-semibold"
-              onClick={() => router.push("/dashboard")}
-            >
-              Return to Student Dashboard
-            </Button>
-          </div>
-        </div>
-      )}
       {/* Full-Screen Submission Loader */}
       {isSubmitting && (
         <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-navy-950/90 backdrop-blur-md">
