@@ -186,7 +186,7 @@ export default function AiQuestionExtractorModal({
           <div>
             <div className="flex items-center gap-2">
               <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                ✨ Gemini 2.5 Flash Vision AI
+                ✨ Gemini 3.5 Flash Vision AI
               </span>
               <h2 className="text-xl font-bold text-white">AI Question Extractor</h2>
             </div>

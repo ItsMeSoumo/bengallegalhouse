@@ -64,6 +64,7 @@ Rules:
     const modelsToTry = [
       "gemini-3.5-flash-lite",
       "gemini-3.5-flash-lite-preview",
+      "gemini-3.5-flash",
       "gemini-2.0-flash-lite",
       "gemini-2.0-flash-lite-preview",
       "gemini-2.0-flash-lite-preview-02-05",

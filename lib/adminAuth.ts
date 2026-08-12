@@ -5,7 +5,7 @@ export const COOKIE_NAME = "admin_token";
 const SECRET =
   process.env.ADMIN_JWT_SECRET ||
   process.env.ADMIN_PASSWORD ||
-  "sohamcbt_master_admin_secret_key_2026";
+  "oneplacecbt_master_admin_secret_key_2026";
 
 /**
  * Creates a signed admin session token using HMAC SHA-256.
