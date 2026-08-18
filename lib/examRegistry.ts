@@ -1,7 +1,6 @@
-// ── Exam Registry — Client-Safe (NO serverQuestions import) ──────────────────
+// ── Exam Registry — Client-Safe ──────────────────────────────────────────────
 // Questions are loaded from Firestore DB via /api/exam/questions (server-side).
 // This file contains only exam paper METADATA for UI display purposes.
-// correctAnswer values are NEVER present here on the client.
 
 import { ExamPaper, ServerQuestion } from "./types";
 import {
@@ -14,67 +13,41 @@ import {
 // Metadata-only exam papers (questions: [] — loaded from DB at runtime)
 export const initialExamPapers: ExamPaper[] = [
   {
-    id: "culet-2026-comprehensive-mock-3",
-    title: "Comprehensive Mock Examination & Practice Booklet 2026",
-    subtitle: "Advanced Multidisciplinary Assessment (100 Questions)",
-    description: "Full 100-question multidisciplinary assessment paper covering Vocabulary, Quantitative Aptitude, Constitution, Legal Principles, and Reasoning.",
-    totalTimeMinutes: 120,
+    id: "class-7-8-gk-assessment-1",
+    title: "Class 7 & 8 General Knowledge Assessment",
+    subtitle: "Science, Geography, History, Civics & Space (25 Questions)",
+    description: "Comprehensive 25-question General Knowledge assessment paper covering Solar System, Indian Constitution, World Geography, Discoveries, and Sports.",
+    totalTimeMinutes: 30,
     marksPerCorrect: 1,
     negativeMarks: 0.25,
     passingPercentage: 40,
-    maxAttempts: 1,
+    maxAttempts: 2,
     status: "active",
     questions: [], // Loaded from Firestore DB at runtime
   },
   {
-    id: "culet-2026-hard-mixed",
-    title: "CULET-2026 MOCK TEST — HARD MIXED SET",
-    subtitle: "Comprehensive Law Practice Exam",
-    description: "Challenge yourself with a fully mixed 100-question practice set covering General Knowledge (25), English (35), Current Affairs (20), Quantitative Aptitude (10), Logical Reasoning (5), and Legal Aptitude (5).",
-    totalTimeMinutes: 120,
-    marksPerCorrect: 1,
-    negativeMarks: 0.25,
-    passingPercentage: 40,
-    maxAttempts: 1,
-    status: "active",
-    questions: [], // Questions loaded from Firestore — never bundled client-side
-  },
-  {
-    id: "culet-2026-mock-2",
-    title: "CULET-2026 MOCK TEST 2",
-    subtitle: "Law Entrance Practice Examination",
-    description: "Complete 100-question comprehensive mock exam covering Constitutional Law, Legal Reasoning, Logical Reasoning, English, and General Knowledge.",
-    totalTimeMinutes: 120,
-    marksPerCorrect: 1,
-    negativeMarks: 0.25,
-    passingPercentage: 40,
-    maxAttempts: 1,
-    status: "active",
-    questions: [], // Questions loaded from Firestore — never bundled client-side
-  },
-  {
-    id: "legal-aptitude-mock-1",
-    title: "Legal Aptitude & Constitutional Law Test",
-    subtitle: "Subject Specialization Paper",
-    description: "Focused 30-question assessment on Legal Principles, Law of Torts, Indian Constitution, and Criminal Law.",
-    totalTimeMinutes: 40,
-    marksPerCorrect: 1,
-    negativeMarks: 0.25,
-    passingPercentage: 50,
-    maxAttempts: 1,
-    status: "active",
-    questions: [],
-  },
-  {
-    id: "gk-current-affairs-1",
-    title: "General Knowledge & Legal Awareness Practice",
-    subtitle: "Quick Practice Paper",
-    description: "20-question speed drill on General Knowledge, Landmark Court Rulings, and Current Legal Affairs.",
-    totalTimeMinutes: 25,
+    id: "science-nature-quiz-1",
+    title: "Science & Nature Exploration Quiz",
+    subtitle: "Junior Science & Ecology Drill (15 Questions)",
+    description: "Interactive science assessment covering Biology, Earth Atmosphere, Physics energy concepts, and Chemical elements for Middle School.",
+    totalTimeMinutes: 20,
     marksPerCorrect: 1,
     negativeMarks: 0.25,
     passingPercentage: 40,
     maxAttempts: 3,
+    status: "active",
+    questions: [],
+  },
+  {
+    id: "history-civics-special-1",
+    title: "Indian History & Constitution Challenge",
+    subtitle: "Heritage, Freedom Movement & Civics (20 Questions)",
+    description: "Focused assessment on Indian National Movement, Fundamental Rights, Parliament, and Historical Monuments.",
+    totalTimeMinutes: 25,
+    marksPerCorrect: 1,
+    negativeMarks: 0.25,
+    passingPercentage: 40,
+    maxAttempts: 1,
     status: "active",
     questions: [],
   },
@@ -88,7 +61,7 @@ function loadFromStorage(): ExamPaper[] {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed)) {
+        if (Array.isArray(parsed) && parsed.length > 0) {
           return parsed.map((p: ExamPaper) => ({
             ...p,
             questions: Array.isArray(p?.questions) ? p.questions : [],
@@ -214,4 +187,3 @@ export function resetExamPapersToDefault(): void {
     console.error("Error in resetExamPapersToDefault:", err);
   }
 }
-

@@ -39,6 +39,7 @@ export default function ExamPage() {
   // Refs for tracking tab switches reliably without React state async latency
   const tabSwitchRef = useRef(0);
   const lastViolationTimeRef = useRef(0);
+  const isAwayRef = useRef(false);
 
   const handleSubmit = useCallback(async () => {
     if (isSubmitting) return;
@@ -46,15 +47,25 @@ export default function ExamPage() {
     try {
       const currentState = examStateRef.current;
       const timeTaken = Math.floor((Date.now() - currentState.startTime) / 1000);
-      const activeExamId = sessionStorage.getItem("activeExamId") || "culet-2026-mock-2";
+      const activeExamId = sessionStorage.getItem("activeExamId") || "class-7-8-gk-assessment-1";
+      const sessionId = sessionStorage.getItem("activeSessionId") || "";
+
+      const candidateEmail =
+        sessionStorage.getItem("candidateEmail") || localStorage.getItem("candidateEmail") || "";
+      const authToken =
+        sessionStorage.getItem("authToken") || localStorage.getItem("authToken") || "";
 
       const response = await fetch("/api/exam/submit", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
         body: JSON.stringify({
           examId: activeExamId,
+          sessionId: sessionId,
           candidateName: currentState.candidateName,
-          candidateEmail: sessionStorage.getItem("candidateEmail") || "",
+          candidateEmail: candidateEmail,
           answers: currentState.answers,
           timeTaken,
           tabSwitchCount: tabSwitchRef.current,
@@ -62,12 +73,12 @@ export default function ExamPage() {
         }),
       });
 
-      const candidateEmail = sessionStorage.getItem("candidateEmail") || currentState.candidateName;
-      const sKey = `soham_cbt_session_${activeExamId}_${candidateEmail.toLowerCase().trim()}`;
+      const sKey = `soham_cbt_session_${activeExamId}_${(candidateEmail || currentState.candidateName).toLowerCase().trim()}`;
 
       const data = await response.json();
       if (response.ok && data.success && data.result) {
         localStorage.removeItem(sKey);
+        sessionStorage.removeItem("activeSessionId");
         sessionStorage.removeItem("submissionError");
         sessionStorage.setItem("examResult", JSON.stringify(data.result));
       } else {
@@ -93,14 +104,15 @@ export default function ExamPage() {
 
   const timer = useTimer(examTimeSec, handleSubmit, hardEndTimestamp);
 
-  // ── Tab Switch / Anti-Cheating Monitors ─────────────────────────────────────
+  // ── State-Based Away Tracking (Split-Screen & Tab-Switch Safe) ──────────────
 
-  const handleTabSwitchViolation = useCallback(() => {
-    if (exam.state.isSubmitted || isSubmitting) return;
+  const handleAway = useCallback(() => {
+    if (exam.state.isSubmitted || isSubmitting || isAwayRef.current) return;
 
     const now = Date.now();
-    // Ignore duplicate events within 1 second (prevent blur + visibilitychange double-triggering)
-    if (now - lastViolationTimeRef.current < 1000) return;
+    // 2 second debounce
+    if (now - lastViolationTimeRef.current < 2000) return;
+    isAwayRef.current = true;
     lastViolationTimeRef.current = now;
 
     tabSwitchRef.current += 1;
@@ -117,21 +129,31 @@ export default function ExamPage() {
       }, 1200);
     } else {
       setWarningMessage(
-        `Warning (${count}/3): Navigating away or switching tabs during the exam is strictly prohibited! (Exam auto-submits on 4th violation)`
+        `Warning (${count}/3): Navigating away or switching tabs/apps during the exam is strictly prohibited! (Exam auto-submits on 4th violation)`
       );
       setShowWarningModal(true);
     }
   }, [exam, isSubmitting, handleSubmit]);
 
+  const handleReturn = useCallback(() => {
+    isAwayRef.current = false;
+  }, []);
+
   useEffect(() => {
-    const handleVisibilityChange = () => {
+    const handleVisibility = () => {
       if (document.hidden) {
-        handleTabSwitchViolation();
+        handleAway();
+      } else {
+        handleReturn();
       }
     };
 
-    const handleBlur = () => {
-      handleTabSwitchViolation();
+    const handleWindowBlur = () => {
+      handleAway();
+    };
+
+    const handleWindowFocus = () => {
+      handleReturn();
     };
 
     const handleContextMenu = (e: MouseEvent) => {
@@ -150,20 +172,22 @@ export default function ExamPage() {
       }
     };
 
-    window.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("blur", handleBlur);
+    document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("blur", handleWindowBlur);
+    window.addEventListener("focus", handleWindowFocus);
     window.addEventListener("contextmenu", handleContextMenu);
     window.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      window.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("blur", handleBlur);
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("blur", handleWindowBlur);
+      window.removeEventListener("focus", handleWindowFocus);
       window.removeEventListener("contextmenu", handleContextMenu);
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [handleTabSwitchViolation]);
+  }, [handleAway, handleReturn]);
 
-  // Initialize exam on mount — fetch questions from DB via secure server API
+  // Initialize exam on mount — Server-Authoritative Session Lifecycle
   useEffect(() => {
     const name = localStorage.getItem("candidateName") || sessionStorage.getItem("candidateName");
     const email =
@@ -173,138 +197,78 @@ export default function ExamPage() {
       return;
     }
 
-    const activeExamId = sessionStorage.getItem("activeExamId") || "culet-2026-mock-2";
-    const savedTime = sessionStorage.getItem("activeExamTime");
-    if (savedTime && !isNaN(Number(savedTime))) {
-      setExamTimeSec(Number(savedTime));
-    }
+    const activeExamId = sessionStorage.getItem("activeExamId") || "class-7-8-gk-assessment-1";
 
     const initExamProcess = async () => {
       try {
-        // 1. Fetch questions dynamically from Firestore DB via secure server endpoint
-        const res = await fetch(`/api/exam/questions?examId=${encodeURIComponent(activeExamId)}`);
+        const authToken =
+          sessionStorage.getItem("authToken") || localStorage.getItem("authToken") || "";
+
+        // 1. Initialize or resume Server-Authoritative Exam Session via POST /api/exam/start
+        const res = await fetch("/api/exam/start", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+          },
+          body: JSON.stringify({
+            examId: activeExamId,
+            candidateName: name,
+            candidateEmail: email,
+          }),
+        });
+
         const data = await res.json();
 
         if (!data.success || !data.questions || data.questions.length === 0) {
-          console.error("Failed to load exam questions from server DB");
-          setIsInitializing(false);
+          console.error("Failed to start exam session:", data.error);
+          sessionStorage.setItem("submissionError", data.error || "Unable to initialize exam session.");
+          router.push("/dashboard");
           return;
         }
 
+        // Save server session ID
+        if (data.sessionId) {
+          sessionStorage.setItem("activeSessionId", data.sessionId);
+        }
+
         const loadedQuestions: PublicQuestion[] = data.questions;
-
-        // Calculate Hard Scheduled End Time (if present)
-        let scheduledEndMs: number | undefined = undefined;
-        const schedDate = data.scheduledDate || sessionStorage.getItem("activeScheduledDate");
-        const schedEndTime = data.scheduledEndTime || sessionStorage.getItem("activeScheduledEndTime");
-
-        if (schedDate && schedEndTime) {
-          try {
-            const endIso = `${schedDate}T${schedEndTime}:00`;
-            const endObj = new Date(endIso);
-            if (!isNaN(endObj.getTime())) {
-              scheduledEndMs = endObj.getTime();
-              setHardEndTimestamp(scheduledEndMs);
-            }
-          } catch (e) {
-            console.error("Error parsing scheduled end timestamp:", e);
-          }
-        }
-
-        const nominalDurationSec = (data.totalTimeMinutes && data.totalTimeMinutes > 0)
-          ? data.totalTimeMinutes * 60
-          : EXAM_CONFIG.totalTime;
-
-        // Dual Cap Rule: Math.min(nominalDuration, secondsUntilScheduledEnd)
-        let secondsUntilScheduledEnd = Infinity;
-        if (scheduledEndMs) {
-          secondsUntilScheduledEnd = Math.max(0, Math.floor((scheduledEndMs - Date.now()) / 1000));
-        }
-
-        const allocatedDurationSec = Math.min(nominalDurationSec, secondsUntilScheduledEnd);
-
-        // 2. Check for an active, existing exam session in storage (prevents timer/answer reset on reload)
-        const sKey = `soham_cbt_session_${activeExamId}_${(email || name).toLowerCase().trim()}`;
-        const savedSessionRaw = localStorage.getItem(sKey);
-        let parsedSession: any = null;
-
-        if (savedSessionRaw) {
-          try {
-            parsedSession = JSON.parse(savedSessionRaw);
-          } catch (e) {
-            console.error("Error parsing saved exam session:", e);
-          }
-        }
-
-        if (parsedSession && parsedSession.startTime) {
-          const elapsedSec = Math.floor((Date.now() - parsedSession.startTime) / 1000);
-          const totalSec = parsedSession.totalTimeSeconds || allocatedDurationSec;
-          let remainingSec = totalSec - elapsedSec;
-
-          if (scheduledEndMs) {
-            const windowRemainingSec = Math.max(0, Math.floor((scheduledEndMs - Date.now()) / 1000));
-            remainingSec = Math.min(remainingSec, windowRemainingSec);
-          }
-
-          if (remainingSec <= 0) {
-            // Exam timer or scheduled window ran out -> trigger auto-submit
-            setExamQuestions(loadedQuestions);
-            setCandidateName(name);
-            setIsInitializing(false);
-            setTimeout(() => handleSubmit(), 500);
-            return;
-          }
-
-          setExamTimeSec(remainingSec);
-          setRestoredSession(parsedSession);
-        } else {
-          // Fresh exam start — initialize session
-          if (allocatedDurationSec <= 0) {
-            // Exam window expired before candidate started
-            setExamQuestions(loadedQuestions);
-            setCandidateName(name);
-            setIsInitializing(false);
-            setTimeout(() => handleSubmit(), 500);
-            return;
-          }
-
-          setExamTimeSec(allocatedDurationSec);
-          const freshSession = {
-            startTime: Date.now(),
-            totalTimeSeconds: allocatedDurationSec,
-            answers: new Array(loadedQuestions.length).fill(null),
-            markedForReview: new Array(loadedQuestions.length).fill(false),
-            visitedQuestions: [true, ...new Array(loadedQuestions.length - 1).fill(false)],
-            tabSwitchCount: 0,
-          };
-          localStorage.setItem(sKey, JSON.stringify(freshSession));
-        }
-
-        // 3. Check attempt limits
-        if (data.maxAttempts && data.maxAttempts > 0) {
-          const results = await getCandidateExamResults(name, email);
-          const attempts = results.filter(
-            (r) => r.examId === activeExamId
-          ).length;
-
-          if (attempts >= data.maxAttempts) {
-            setLimitReachedModal({ maxAttempts: data.maxAttempts, title: data.title });
-            setIsInitializing(false);
-            return;
-          }
-        }
-
         setExamQuestions(loadedQuestions);
         setCandidateName(name);
+
+        if (data.expiresAt) {
+          setHardEndTimestamp(data.expiresAt);
+        }
+
+        const remainingSec = typeof data.remainingTimeSec === "number" && data.remainingTimeSec > 0
+          ? data.remainingTimeSec
+          : (data.totalTimeSeconds || 1800);
+
+        setExamTimeSec(remainingSec);
+
+        // 2. Restore local answers if returning to active session
+        const sKey = `soham_cbt_session_${activeExamId}_${(email || name).toLowerCase().trim()}`;
+        const savedSessionRaw = localStorage.getItem(sKey);
+        if (savedSessionRaw) {
+          try {
+            const parsed = JSON.parse(savedSessionRaw);
+            if (parsed && Array.isArray(parsed.answers)) {
+              setRestoredSession(parsed);
+            }
+          } catch (e) {
+            console.error("Error parsing saved exam answers:", e);
+          }
+        }
+
+        setIsInitializing(false);
       } catch (err) {
-        console.error("Error initializing exam:", err);
+        console.error("Error in initExamProcess:", err);
         setIsInitializing(false);
       }
     };
 
     initExamProcess();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [router]);
 
   // Initialize exam state once questions load from API (restores saved session if reloading)
   useEffect(() => {

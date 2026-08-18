@@ -1,6 +1,41 @@
-import { ServerQuestion } from "./types";
+import { initializeApp, getApps } from "firebase/app";
+import { getFirestore, doc, setDoc, getDocs, collection, deleteDoc } from "firebase/firestore";
+import * as fs from "fs";
+import * as path from "path";
 
-export const serverQuestions: ServerQuestion[] = [
+// ── Read .env.local manually for node script ────────────────────────────────
+const envPath = path.resolve(process.cwd(), ".env.local");
+let envConfig = {};
+
+if (fs.existsSync(envPath)) {
+  const envContent = fs.readFileSync(envPath, "utf-8");
+  envContent.split("\n").forEach((line) => {
+    const trimmed = line.trim();
+    if (trimmed && !trimmed.startsWith("#")) {
+      const [key, ...values] = trimmed.split("=");
+      if (key && values.length > 0) {
+        envConfig[key.trim()] = values.join("=").trim();
+      }
+    }
+  });
+}
+
+const firebaseConfig = {
+  apiKey: envConfig.NEXT_PUBLIC_FIREBASE_API_KEY || process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: envConfig.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: envConfig.NEXT_PUBLIC_FIREBASE_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: envConfig.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: envConfig.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: envConfig.NEXT_PUBLIC_FIREBASE_APP_ID || process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+};
+
+console.log("🔥 Connecting to Firebase Project:", firebaseConfig.projectId);
+
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+const db = getFirestore(app);
+
+// ── Class 7 & 8 GK Question Set (25 Questions) ──────────────────────────────
+const class7_8_Questions = [
   {
     id: 1,
     question: "Which planet in our solar system is known as the 'Red Planet'?",
@@ -202,3 +237,77 @@ export const serverQuestions: ServerQuestion[] = [
     explanation: "According to Article 53 of the Constitution, the President is the Supreme Commander of the Armed Forces."
   }
 ];
+
+const examPapersToSeed = [
+  {
+    id: "class-7-8-gk-assessment-1",
+    title: "Class 7 & 8 General Knowledge Assessment",
+    subtitle: "Science, Geography, History, Civics & Space (25 Questions)",
+    description: "Comprehensive 25-question General Knowledge assessment paper covering Solar System, Indian Constitution, World Geography, Discoveries, and Sports.",
+    totalTimeMinutes: 30,
+    marksPerCorrect: 1,
+    negativeMarks: 0.25,
+    passingPercentage: 40,
+    maxAttempts: 2,
+    status: "active",
+    isPrivate: false,
+    questions: class7_8_Questions,
+  },
+  {
+    id: "science-nature-quiz-1",
+    title: "Science & Nature Exploration Quiz",
+    subtitle: "Junior Science & Ecology Drill (15 Questions)",
+    description: "Interactive science assessment covering Biology, Earth Atmosphere, Physics energy concepts, and Chemical elements for Middle School.",
+    totalTimeMinutes: 20,
+    marksPerCorrect: 1,
+    negativeMarks: 0.25,
+    passingPercentage: 40,
+    maxAttempts: 3,
+    status: "active",
+    isPrivate: false,
+    questions: class7_8_Questions.slice(0, 15),
+  },
+  {
+    id: "history-civics-special-1",
+    title: "Indian History & Constitution Challenge",
+    subtitle: "Heritage, Freedom Movement & Civics (20 Questions)",
+    description: "Focused assessment on Indian National Movement, Fundamental Rights, Parliament, and Historical Monuments.",
+    totalTimeMinutes: 25,
+    marksPerCorrect: 1,
+    negativeMarks: 0.25,
+    passingPercentage: 40,
+    maxAttempts: 1,
+    status: "active",
+    isPrivate: false,
+    questions: class7_8_Questions.slice(0, 20),
+  },
+];
+
+async function seed() {
+  console.log("\n🌱 Starting Database Seeding...");
+
+  // 1. Clean up old demo CULET papers if present
+  const snap = await getDocs(collection(db, "exam_papers"));
+  console.log(`📋 Found ${snap.docs.length} existing papers in Firestore.`);
+
+  for (const d of snap.docs) {
+    if (d.id.startsWith("culet-") || d.id.startsWith("legal-aptitude") || d.id.startsWith("gk-current")) {
+      console.log(`🗑️ Deleting old demo paper: ${d.id}`);
+      await deleteDoc(d.ref);
+    }
+  }
+
+  // 2. Insert new Class 7-8 GK papers
+  for (const paper of examPapersToSeed) {
+    console.log(`✨ Seeding paper '${paper.id}' (${paper.questions.length} questions)...`);
+    await setDoc(doc(db, "exam_papers", paper.id), paper, { merge: true });
+  }
+
+  console.log("\n✅ Database Seeding Completed Successfully!");
+  process.exit(0);
+}
+
+seed().catch((err) => {
+  console.error("❌ Seeding Error:", err);
+  process.exit(1);
+});

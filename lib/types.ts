@@ -110,3 +110,22 @@ export interface ResultDocument extends ExamResult {
   studentDocId?: string;
 }
 
+// ── Exam Session Management (Server-Authoritative Lifecycle) ────────────────
+
+export type SessionStatus = "in_progress" | "completed" | "expired";
+
+export interface ExamSession {
+  id: string;
+  examId: string;
+  examTitle: string;
+  candidateName: string;
+  candidateEmail: string;
+  serverStartTime: number;
+  expiresAt: number;
+  totalTimeSeconds: number;
+  status: SessionStatus;
+  tabSwitchCount: number;
+  createdAt: string;
+  submittedAt?: string;
+}
+

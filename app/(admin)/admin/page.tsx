@@ -341,7 +341,7 @@ export default function AdminPage() {
       setStudentUsers(users);
     } catch (err) {
       console.error("Error fetching student users:", err);
-    } fontally: {
+    } finally {
       setLoadingStudents(false);
     }
   }, []);

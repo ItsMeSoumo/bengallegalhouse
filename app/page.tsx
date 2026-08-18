@@ -71,8 +71,8 @@ export default function Home() {
           setIsSubmitting(false);
           return;
         }
-        if (!password || password.length < 4) {
-          setError("Password must be at least 4 characters long");
+        if (!password || password.length < 6) {
+          setError("Password must be at least 6 characters long");
           setIsSubmitting(false);
           return;
         }
@@ -82,21 +82,21 @@ export default function Home() {
           return;
         }
 
-        // Register user
+        // Register user via Firebase Auth
         const res = await registerStudentUserInDB(fullName, email, password);
         if (!res.success) {
-          setError(res.error || "An account with this email address already exists. Please Log In!");
+          setError(res.error || "Failed to create account. Please try again.");
           setIsSubmitting(false);
           return;
         }
 
         // Save Student Session persistently
-        setStudentSession(res.user!.name, res.user!.email);
+        setStudentSession(res.user!.name, res.user!.email, res.user!.token);
         router.push("/dashboard");
       } else {
         // ── LOG IN VERIFICATION ──────────────────────────────────────────────
         if (!email.trim()) {
-          setError("Please enter your email or full name");
+          setError("Please enter your email");
           setIsSubmitting(false);
           return;
         }
@@ -106,7 +106,7 @@ export default function Home() {
           return;
         }
 
-        // Check user credentials
+        // Check user credentials via Firebase Auth
         const res = await authenticateStudentUserInDB(email, password);
         if (!res.success) {
           setError(res.error || "Authentication failed. Please check your credentials.");
@@ -115,11 +115,11 @@ export default function Home() {
         }
 
         // Log In Successful
-        setStudentSession(res.user!.name, res.user!.email);
+        setStudentSession(res.user!.name, res.user!.email, res.user!.token);
         router.push("/dashboard");
       }
     } catch {
-      setError("An error occurred. Please try again.");
+      setError("An error occurred during authentication. Please try again.");
     } finally {
       setIsSubmitting(false);
     }

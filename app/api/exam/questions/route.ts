@@ -5,7 +5,14 @@ import { resolveExamPaper } from "@/lib/paperResolver";
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const examId = searchParams.get("examId");
-  console.log(`\n📖 [API GET: /api/exam/questions] Questions requested for Exam ID: '${examId}'`);
+  const candidateName = searchParams.get("candidateName") || "Anonymous Student";
+  const candidateEmail = searchParams.get("candidateEmail") || "No Email";
+
+  const safeName = String(candidateName).replace(/[\r\n]/g, "").trim();
+  const safeEmail = String(candidateEmail).replace(/[\r\n]/g, "").trim();
+  const safeExamId = String(examId || "").replace(/[\r\n]/g, "").trim();
+
+  console.log(`\n📖 [API GET: /api/exam/questions] Student: "${safeName}" (${safeEmail}) | Exam ID: '${safeExamId}'`);
 
   try {
     if (!examId) {
