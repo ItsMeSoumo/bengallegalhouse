@@ -13,19 +13,17 @@
 
 ## 🎬 Feature Demos & Platform Previews
 
-### 🎥 1. Live Exam Engine, 0ms Question Switching & Anti-Cheat Strike Enforcement
+### ⚡ 1. Live Exam Engine, 0ms Question Switching & Anti-Cheat Strike Alert
 > **Candidate Exam Experience**: Real-time palette navigation with 0ms client-side cache, reactive timer countdown, virtual NAT keypad, and instant **Anti-Cheat Strike Alert** upon tab-switching or split-screen activity (auto-submits on 4th strike).
 
-https://github.com/user-attachments/assets/demo-exam-anticheat
-*(Demo file: [`public/demo-exam-anticheat.mp4`](./public/demo-exam-anticheat.mp4))*
+![Live Exam Engine & Anti-Cheat Demo](./public/demo-exam-anticheat.gif)
 
 ---
 
-### 🎥 2. Gemini 3.5 Flash Multimodal Question Extractor (Admin OCR)
+### 🤖 2. Gemini 3.5 Flash Multimodal Question Extractor (Admin OCR)
 > **Automated Paper Digitization**: Administrator uploads a raw scanned PDF / photo booklet; Google Gemini 3.5 Flash Multimodal Vision AI parses mathematical equations, options, and question keys in real time, auto-filling 100 questions into the database in seconds.
 
-https://github.com/user-attachments/assets/demo-ai-extractor
-*(Demo file: [`public/demo-ai-extractor.mp4`](./public/demo-ai-extractor.mp4))*
+![Gemini AI Question Extractor Demo](./public/demo-ai-extractor.gif)
 
 ---
 
